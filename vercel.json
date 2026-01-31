@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/inworld-api/:path*",
-      "destination": "https://api.inworld.ai/:path*"
-    }
-  ]
-}
