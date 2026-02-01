@@ -9,11 +9,14 @@ interface InworldTTSConfig {
 
 // Use proxy in development, direct API in production
 const getInworldEndpoint = () => {
-  // In development (localhost), use the Vite proxy
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return '/inworld-api/tts/v1/voice';
+  // In development (localhost or 127.0.0.1), use the Vite proxy
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return '/inworld-api/tts/v1/voice';
+    }
   }
-  // In production, call the API directly
+  // In production (Vercel, etc.), call the API directly
   return 'https://api.inworld.ai/tts/v1/voice';
 };
 
