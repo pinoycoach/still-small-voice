@@ -1,25 +1,44 @@
+import { GoogleGenAI } from "@google/genai";
 
-import { GoogleGenAI, Modality } from "@google/genai";
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+if (!apiKey) {
+  throw new Error("VITE_GEMINI_API_KEY is not set in your .env file. It should be VITE_GEMINI_API_KEY=your_key");
+}
+
+const ai = new GoogleGenAI({ apiKey });
 
 /**
- * Generate sanctuary image for the devotional
- * Uses the archetype's image mood for grounded visual generation
+ * Generate sanctuary image for the devotional.
+ * Uses a generative model to create an image from a text prompt.
  */
 export const generateWhisperImage = async (prompt: string): Promise<string> => {
-  const enhancedPrompt = `${prompt} --aspect-ratio 9:16 --cinematic --lighting dramatic --style ethereal sanctuary`;
+  const enhancedPrompt = `Generate a beautiful, ethereal sanctuary image: ${prompt}. Style: cinematic lighting, dramatic atmosphere, peaceful and spiritual mood, 9:16 aspect ratio portrait orientation.`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: {
-      parts: [{ text: enhancedPrompt }]
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image",
+      contents: enhancedPrompt,
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData?.data && part.inlineData.mimeType?.startsWith('image/')) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
     }
-  });
 
-  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-  if (part?.inlineData?.data) return `data:image/png;base64,${part.inlineData.data}`;
-  throw new Error("Failed to generate image");
+    console.error('No image found in response:', JSON.stringify(response, null, 2));
+    throw new Error("No image data in response");
+  } catch (error) {
+    console.error('Image generation error:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to generate image: ${error.message}`);
+    }
+    throw new Error('Failed to generate image due to an unknown error.');
+  }
 };
 
 // Re-export for backward compatibility

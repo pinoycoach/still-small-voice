@@ -3,7 +3,9 @@
     "allow": [
       "Bash(find:*)",
       "Bash(ls:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:ai.google.dev)"
     ]
   }
 }

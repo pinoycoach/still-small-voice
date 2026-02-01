@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import type {
   ArchetypeKey,
   SoulAnalysis,
@@ -14,7 +13,8 @@ import type {
 } from "../types";
 import verifiedVault from "../data/verified_vault.json";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+const ai = new GoogleGenAI({ apiKey });
 const vault = verifiedVault as VerifiedVault;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,30 +107,6 @@ Map what you see to one of four Devotional Temperaments:
 Analyze with compassion. There are no wrong answers - only the goal of providing relevant comfort.
 `;
 
-const temperamentSchema = {
-  type: Type.OBJECT,
-  properties: {
-    temperament: {
-      type: Type.STRING,
-      description: "One of: Sage, Lover, Warrior, Child"
-    },
-    confidence: {
-      type: Type.NUMBER,
-      description: "Confidence in temperament detection 0-100"
-    },
-    scriptureFamily: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "List of scripture books/types that match this temperament"
-    },
-    reasoning: {
-      type: Type.STRING,
-      description: "Brief explanation of facial cues observed"
-    }
-  },
-  required: ["temperament", "confidence", "scriptureFamily", "reasoning"]
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENT 7: THE EMOTIONAL WEATHER READER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,25 +139,6 @@ METRICS TO DETECT:
 
 Be accurate but compassionate. This calibration directly affects how they receive comfort.
 `;
-
-const emotionalWeatherSchema = {
-  type: Type.OBJECT,
-  properties: {
-    warmthNeed: {
-      type: Type.NUMBER,
-      description: "0-100: How much comfort/connection this person needs"
-    },
-    powerLevel: {
-      type: Type.NUMBER,
-      description: "0-100: Are they empowered (high) or overwhelmed (low)"
-    },
-    openness: {
-      type: Type.NUMBER,
-      description: "0-100: How receptive they are to receiving right now"
-    }
-  },
-  required: ["warmthNeed", "powerLevel", "openness"]
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENT 9: THE BURDEN DETECTOR
@@ -220,30 +177,6 @@ MINISTRY RECOMMENDATION:
 Be compassionate in your detection. The goal is to help, not expose.
 `;
 
-const burdenDetectionSchema = {
-  type: Type.OBJECT,
-  properties: {
-    maskedPain: {
-      type: Type.BOOLEAN,
-      description: "Is there evidence of hidden emotional pain?"
-    },
-    sfumatoCoefficient: {
-      type: Type.NUMBER,
-      description: "0-100: Variance in expression. 3-15 is healthy. <3 suggests suppression."
-    },
-    suppressionIndicators: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "List of specific suppression signals observed"
-    },
-    ministryRecommendation: {
-      type: Type.STRING,
-      description: "One of: surface, deeper, crisis"
-    }
-  },
-  required: ["maskedPain", "sfumatoCoefficient", "suppressionIndicators", "ministryRecommendation"]
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // AGENT 10: THE AUTHENTICITY BRIDGE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,60 +209,6 @@ EXAMPLES:
 When gap exists, the FACE tells the truth. Minister to the deeper need.
 `;
 
-const authenticityBridgeSchema = {
-  type: Type.OBJECT,
-  properties: {
-    statedEmotion: {
-      type: Type.STRING,
-      description: "What they said they're feeling"
-    },
-    facialEmotion: {
-      type: Type.STRING,
-      description: "What their face actually shows"
-    },
-    incongruenceGap: {
-      type: Type.NUMBER,
-      description: "0-100: Gap between stated and actual emotional state"
-    },
-    trueNeed: {
-      type: Type.STRING,
-      description: "The real need based on facial truth"
-    },
-    ministryApproach: {
-      type: Type.STRING,
-      description: "How to approach this person given the gap"
-    }
-  },
-  required: ["statedEmotion", "facialEmotion", "incongruenceGap", "trueNeed", "ministryApproach"]
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LEGACY: Basic Soul Analysis Schema (for backward compatibility)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const soulAnalysisSchema = {
-  type: Type.OBJECT,
-  properties: {
-    archetype: {
-      type: Type.STRING,
-      description: `One of the 8 archetypes: ${Object.keys(vault.archetypes).join(', ')}`
-    },
-    intensityScore: {
-      type: Type.NUMBER,
-      description: "Emotional intensity from 0-100 based on facial expression"
-    },
-    confidence: {
-      type: Type.NUMBER,
-      description: "Confidence in the archetype detection from 0-100"
-    },
-    reasoning: {
-      type: Type.STRING,
-      description: "Brief, compassionate explanation of what was observed (2-3 sentences max)"
-    }
-  },
-  required: ["archetype", "intensityScore", "confidence", "reasoning"]
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // PUBLIC API: ANALYSIS FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -361,38 +240,45 @@ ${Object.entries(vault.archetypes).map(([name, data]) =>
 ).join('\n')}
 
 Analyze with compassion.
+
+Respond with valid JSON only in this exact format:
+{
+  "archetype": "One of the archetypes listed above",
+  "intensityScore": 0-100,
+  "confidence": 0-100,
+  "reasoning": "Brief explanation"
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: 'image/jpeg',
-                data: cleanBase64
-              }
-            },
-            { text: combinedPrompt }
-          ]
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: cleanBase64
+            }
+          },
+          { text: combinedPrompt }
+        ],
+        config: {
+          systemInstruction: TEMPERAMENT_AGENT_PERSONA,
         }
-      ],
-      config: {
-        systemInstruction: TEMPERAMENT_AGENT_PERSONA,
-        responseMimeType: "application/json",
-        responseSchema: soulAnalysisSchema,
-        temperature: 0.4,
-      }
-    }),
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Soul analysis failed");
 
-  const analysis = JSON.parse(text) as SoulAnalysis;
+  // Parse and extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  const analysis = JSON.parse(jsonMatch[0]) as SoulAnalysis;
 
   // Validate archetype
   if (!Object.keys(vault.archetypes).includes(analysis.archetype)) {
@@ -485,30 +371,36 @@ Archetypes:
 ${Object.entries(vault.archetypes).map(([name, data]) =>
   `- ${name}: ${data.description}`
 ).join('\n')}
+
+Respond with valid JSON only in this exact format:
+{
+  "archetype": "One of the archetypes listed above",
+  "intensityScore": 0-100,
+  "confidence": 0-100,
+  "reasoning": "Brief explanation"
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
-        ]
-      }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: soulAnalysisSchema,
-        temperature: 0.4,
-      }
-    }),
+        ],
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Basic analysis failed");
 
-  const analysis = JSON.parse(text) as SoulAnalysis;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  const analysis = JSON.parse(jsonMatch[0]) as SoulAnalysis;
   if (!Object.keys(vault.archetypes).includes(analysis.archetype)) {
     analysis.archetype = 'Lost Child';
   }
@@ -519,62 +411,77 @@ async function runTemperamentAgent(cleanBase64: string): Promise<TemperamentAnal
   const prompt = `
 Analyze this person's facial expression to discern their spiritual temperament.
 Map to: Sage (needs wisdom), Lover (needs comfort), Warrior (needs courage), or Child (needs rest).
+
+Respond with valid JSON only in this exact format:
+{
+  "temperament": "One of: Sage, Lover, Warrior, Child",
+  "confidence": 0-100,
+  "scriptureFamily": ["list", "of", "scripture", "books"],
+  "reasoning": "Brief explanation"
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
-        ]
-      }],
-      config: {
-        systemInstruction: TEMPERAMENT_AGENT_PERSONA,
-        responseMimeType: "application/json",
-        responseSchema: temperamentSchema,
-        temperature: 0.4,
-      }
-    }),
+        ],
+        config: {
+          systemInstruction: TEMPERAMENT_AGENT_PERSONA,
+        }
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Temperament analysis failed");
 
-  return JSON.parse(text) as TemperamentAnalysis;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  return JSON.parse(jsonMatch[0]) as TemperamentAnalysis;
 }
 
 async function runEmotionalWeatherAgent(cleanBase64: string): Promise<EmotionalWeather> {
   const prompt = `
 Read the emotional "weather" from this person's face.
 Assess: warmth need, power level, and openness to receive.
+
+Respond with valid JSON only in this exact format:
+{
+  "warmthNeed": 0-100,
+  "powerLevel": 0-100,
+  "openness": 0-100
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
-        ]
-      }],
-      config: {
-        systemInstruction: EMOTIONAL_WEATHER_AGENT_PERSONA,
-        responseMimeType: "application/json",
-        responseSchema: emotionalWeatherSchema,
-        temperature: 0.3,
-      }
-    }),
+        ],
+        config: {
+          systemInstruction: EMOTIONAL_WEATHER_AGENT_PERSONA,
+        }
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Emotional weather analysis failed");
 
-  return JSON.parse(text) as EmotionalWeather;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  return JSON.parse(jsonMatch[0]) as EmotionalWeather;
 }
 
 async function runBurdenDetectorAgent(cleanBase64: string): Promise<BurdenDetection> {
@@ -582,31 +489,39 @@ async function runBurdenDetectorAgent(cleanBase64: string): Promise<BurdenDetect
 Analyze this person's face for signs of hidden emotional burden.
 Look for: masked smiles, suppression indicators, and the Sfumato coefficient.
 Determine if they need surface encouragement, deeper ministry, or crisis intervention.
+
+Respond with valid JSON only in this exact format:
+{
+  "maskedPain": true or false,
+  "sfumatoCoefficient": 0-100,
+  "suppressionIndicators": ["list", "of", "indicators"],
+  "ministryRecommendation": "One of: surface, deeper, crisis"
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
-        ]
-      }],
-      config: {
-        systemInstruction: BURDEN_DETECTOR_AGENT_PERSONA,
-        responseMimeType: "application/json",
-        responseSchema: burdenDetectionSchema,
-        temperature: 0.3,
-      }
-    }),
+        ],
+        config: {
+          systemInstruction: BURDEN_DETECTOR_AGENT_PERSONA,
+        }
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Burden detection failed");
 
-  return JSON.parse(text) as BurdenDetection;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  return JSON.parse(jsonMatch[0]) as BurdenDetection;
 }
 
 async function runAuthenticityBridgeAgent(
@@ -620,31 +535,40 @@ They said: "${userInput}"
 
 Analyze the gap between their stated emotion and their facial truth.
 If there's a significant gap, identify their true need.
+
+Respond with valid JSON only in this exact format:
+{
+  "statedEmotion": "What they said",
+  "facialEmotion": "What their face shows",
+  "incongruenceGap": 0-100,
+  "trueNeed": "Their real need",
+  "ministryApproach": "How to approach them"
+}
 `;
 
   const response = await retry(
-    () => ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
-        ]
-      }],
-      config: {
-        systemInstruction: AUTHENTICITY_BRIDGE_AGENT_PERSONA,
-        responseMimeType: "application/json",
-        responseSchema: authenticityBridgeSchema,
-        temperature: 0.3,
-      }
-    }),
+        ],
+        config: {
+          systemInstruction: AUTHENTICITY_BRIDGE_AGENT_PERSONA,
+        }
+      });
+    },
     { maxAttempts: 3, delayMs: 1000 }
   );
 
   const text = response.text;
   if (!text) throw new Error("Authenticity bridge analysis failed");
 
-  return JSON.parse(text) as AuthenticityBridge;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  return JSON.parse(jsonMatch[0]) as AuthenticityBridge;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -694,38 +618,27 @@ export async function validateFacePresent(imageBase64: string): Promise<boolean>
     ? imageBase64.split('base64,')[1]
     : imageBase64;
 
-  const validationSchema = {
-    type: Type.OBJECT,
-    properties: {
-      faceDetected: { type: Type.BOOLEAN },
-      suitableForAnalysis: { type: Type.BOOLEAN }
-    },
-    required: ["faceDetected", "suitableForAnalysis"]
-  };
-
   try {
     const response = await retry(
-      () => ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [{
-          parts: [
+      async () => {
+        return await ai.models.generateContent({
+          model: "gemini-2.5-flash-image",
+          contents: [
             { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-            { text: "Is there a human face visible and suitable for emotional analysis?" }
-          ]
-        }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: validationSchema,
-          temperature: 0.1,
-        }
-      }),
+            { text: "Is there a human face visible and suitable for emotional analysis? Respond with valid JSON: {\"faceDetected\": true/false, \"suitableForAnalysis\": true/false}" }
+          ],
+        });
+      },
       { maxAttempts: 3, delayMs: 1000 }
     );
 
     const text = response.text;
     if (!text) return false;
 
-    const result = JSON.parse(text) as { faceDetected: boolean; suitableForAnalysis: boolean };
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return false;
+
+    const result = JSON.parse(jsonMatch[0]) as { faceDetected: boolean; suitableForAnalysis: boolean };
     return result.faceDetected && result.suitableForAnalysis;
   } catch {
     return false;

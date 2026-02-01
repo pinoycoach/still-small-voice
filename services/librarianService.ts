@@ -1,9 +1,12 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import type { ArchetypeKey, AnchorVerse, GroundedWhisper, SoulAnalysis, VerifiedVault } from "../types";
 import verifiedVault from "../data/verified_vault.json";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+if (!apiKey) {
+    throw new Error("VITE_GEMINI_API_KEY is not set in your .env file.");
+}
+const ai = new GoogleGenAI({ apiKey });
 const vault = verifiedVault as VerifiedVault;
 
 /**
@@ -17,21 +20,14 @@ const vault = verifiedVault as VerifiedVault;
  * 3. Grounding all output in the canonical verse text
  */
 
-// Schema for the interpretation output
-const interpretationSchema = {
-  type: Type.OBJECT,
-  properties: {
-    devotionalText: {
-      type: Type.STRING,
-      description: "A 2-3 sentence whispered prayer (MAX 50 words total). Speak directly with 'you'. Intimate and gentle. Vary the opening."
-    },
-    imagePrompt: {
-      type: Type.STRING,
-      description: "An ethereal, sanctuary-style image prompt based on the verse and archetype's emotional state."
-    }
-  },
-  required: ["devotionalText", "imagePrompt"]
-};
+// Schema description for prompting
+const INTERPRETATION_FORMAT = `
+Respond with valid JSON only, in this exact format:
+{
+  "devotionalText": "A 2-3 sentence whispered prayer (MAX 50 words total). Speak directly with 'you'. Intimate and gentle.",
+  "imagePrompt": "An ethereal, sanctuary-style image prompt based on the verse."
+}
+`;
 
 // The Librarian persona - creative interpretation grounded in scripture
 const LIBRARIAN_PERSONA = `
@@ -152,20 +148,22 @@ ${variationSeed}
 
   // Step 4: Call the LLM with higher temperature for variety
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: groundedPrompt,
+    model: 'gemini-2.5-flash-image',
+    contents: groundedPrompt + INTERPRETATION_FORMAT,
     config: {
       systemInstruction: LIBRARIAN_PERSONA,
-      responseMimeType: "application/json",
-      responseSchema: interpretationSchema,
-      temperature: 0.7, // Higher temperature for creative variety
+      temperature: 0.7,
     }
   });
 
   const text = response.text;
   if (!text) throw new Error("Librarian failed to interpret the verse");
 
-  const interpretation = JSON.parse(text) as { devotionalText: string; imagePrompt: string };
+  // Parse and extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  const interpretation = JSON.parse(jsonMatch[0]) as { devotionalText: string; imagePrompt: string };
 
   return {
     archetype,
@@ -182,29 +180,6 @@ ${variationSeed}
 export async function analyzeTextForArchetype(userInput: string): Promise<SoulAnalysis> {
   const archetypeList = Object.keys(vault.archetypes).join(', ');
 
-  const analysisSchema = {
-    type: Type.OBJECT,
-    properties: {
-      archetype: {
-        type: Type.STRING,
-        description: `One of: ${archetypeList}`
-      },
-      intensityScore: {
-        type: Type.NUMBER,
-        description: "Emotional intensity from 0-100"
-      },
-      confidence: {
-        type: Type.NUMBER,
-        description: "Confidence in archetype detection from 0-100"
-      },
-      reasoning: {
-        type: Type.STRING,
-        description: "Brief explanation of why this archetype was selected"
-      }
-    },
-    required: ["archetype", "intensityScore", "confidence", "reasoning"]
-  };
-
   const analysisPrompt = `
 Analyze this person's emotional state and map it to one of the spiritual archetypes.
 
@@ -217,15 +192,21 @@ ${Object.entries(vault.archetypes).map(([name, data]) =>
 
 Select the archetype that best matches their emotional state.
 Rate the intensity (0-100) of their emotional expression.
+
+Respond with valid JSON only in this exact format:
+{
+  "archetype": "One of: ${archetypeList}",
+  "intensityScore": 0-100,
+  "confidence": 0-100,
+  "reasoning": "Brief explanation"
+}
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash-image',
     contents: analysisPrompt,
     config: {
       systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
-      responseMimeType: "application/json",
-      responseSchema: analysisSchema,
       temperature: 0.4,
     }
   });
@@ -233,7 +214,11 @@ Rate the intensity (0-100) of their emotional expression.
   const text = response.text;
   if (!text) throw new Error("Failed to analyze emotional state");
 
-  return JSON.parse(text) as SoulAnalysis;
+  // Parse and extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  return JSON.parse(jsonMatch[0]) as SoulAnalysis;
 }
 
 /**
