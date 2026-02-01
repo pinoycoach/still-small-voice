@@ -155,8 +155,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (gift?.audioBase64) {
       setAudioReady(false);
+      const audioBase64 = gift.audioBase64; // Capture for closure
       const loadAudio = async () => {
-        console.log('Starting audio load, base64 length:', gift.audioBase64.length);
+        console.log('Starting audio load, base64 length:', audioBase64.length);
 
         // Ensure audio context exists
         if (!audioCtxRef.current) {
@@ -171,7 +172,7 @@ const App: React.FC = () => {
 
         try {
           // Decode MP3 using Web Audio API
-          const arrayBuffer = base64ToArrayBuffer(gift.audioBase64);
+          const arrayBuffer = base64ToArrayBuffer(audioBase64);
           console.log('ArrayBuffer created, byteLength:', arrayBuffer.byteLength);
 
           // Clone the buffer because decodeAudioData detaches the original
@@ -204,17 +205,18 @@ const App: React.FC = () => {
           pausedAtRef.current = 0;
           setAudioReady(true);
           console.log('Audio buffer loaded (MP3), original duration:', decodedBuffer.duration, 'trimmed to:', trimmedBuffer.duration, 'seconds');
-        } catch (err: any) {
-          console.error('Error loading audio buffer:', err);
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          console.error('Error loading audio buffer:', error);
           console.error('Error details:', {
-            name: err?.name,
-            message: err?.message,
-            base64Length: gift.audioBase64.length
+            name: error.name,
+            message: error.message,
+            base64Length: audioBase64.length
           });
 
           // Try to provide more info about the audio data
           try {
-            const firstBytes = atob(gift.audioBase64.substring(0, 20));
+            const firstBytes = atob(audioBase64.substring(0, 20));
             console.log('First bytes of audio (hex):', Array.from(firstBytes).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' '));
           } catch (e) {
             console.error('Could not decode base64 for inspection:', e);
@@ -230,10 +232,11 @@ const App: React.FC = () => {
     if (view === 'diagnosis') {
       const messages = LOADING_MESSAGES[loadingStage];
       const interval = setInterval(() => {
-        setLoadingMsgIndex(prev => (prev + 1) % messages.length);
+        setLoadingMsgIndex((prev: number) => (prev + 1) % messages.length);
       }, 2000);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [view, loadingStage]);
 
   // Initialize audio context on first interaction

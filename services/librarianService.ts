@@ -9,6 +9,17 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey });
 const vault = verifiedVault as VerifiedVault;
 
+const API_TIMEOUT_MS = 30000; // 30 second timeout
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = API_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
 /**
  * THE LIBRARIAN LOGIC
  *
@@ -147,14 +158,17 @@ ${variationSeed}
 `;
 
   // Step 4: Call the LLM with higher temperature for variety
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: groundedPrompt + INTERPRETATION_FORMAT,
-    config: {
-      systemInstruction: LIBRARIAN_PERSONA,
-      temperature: 0.7,
-    }
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: groundedPrompt + INTERPRETATION_FORMAT,
+      config: {
+        systemInstruction: LIBRARIAN_PERSONA,
+        temperature: 0.7,
+      }
+    }),
+    API_TIMEOUT_MS
+  );
 
   const text = response.text;
   if (!text) throw new Error("Librarian failed to interpret the verse");
@@ -178,12 +192,28 @@ ${variationSeed}
  * Used when camera is not available or user prefers text input
  */
 export async function analyzeTextForArchetype(userInput: string): Promise<SoulAnalysis> {
+  // Input validation
+  if (!userInput || typeof userInput !== 'string') {
+    throw new Error('Invalid input: must be a non-empty string');
+  }
+
+  // Sanitize input
+  const sanitizedInput = userInput
+    .trim()
+    .slice(0, 500) // Limit to 500 characters
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/\s+/g, ' '); // Normalize whitespace
+
+  if (sanitizedInput.length === 0) {
+    throw new Error('Input cannot be empty');
+  }
+
   const archetypeList = Object.keys(vault.archetypes).join(', ');
 
   const analysisPrompt = `
 Analyze this person's emotional state and map it to one of the spiritual archetypes.
 
-User's Heart: "${userInput}"
+User's Heart: "${sanitizedInput}"
 
 Available Archetypes and their descriptions:
 ${Object.entries(vault.archetypes).map(([name, data]) =>
@@ -202,14 +232,17 @@ Respond with valid JSON only in this exact format:
 }
 `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: analysisPrompt,
-    config: {
-      systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
-      temperature: 0.4,
-    }
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: analysisPrompt,
+      config: {
+        systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
+        temperature: 0.4,
+      }
+    }),
+    API_TIMEOUT_MS
+  );
 
   const text = response.text;
   if (!text) throw new Error("Failed to analyze emotional state");

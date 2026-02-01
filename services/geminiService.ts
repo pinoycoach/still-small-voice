@@ -8,18 +8,42 @@ if (!apiKey) {
 
 const ai = new GoogleGenAI({ apiKey });
 
+const API_TIMEOUT_MS = 60000; // 60 seconds for image generation (longer than text)
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = API_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Image generation timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
 /**
  * Generate sanctuary image for the devotional.
  * Uses a generative model to create an image from a text prompt.
  */
 export const generateWhisperImage = async (prompt: string): Promise<string> => {
-  const enhancedPrompt = `Generate a beautiful, ethereal sanctuary image: ${prompt}. Style: cinematic lighting, dramatic atmosphere, peaceful and spiritual mood, 9:16 aspect ratio portrait orientation.`;
+  // Validate and sanitize input
+  if (!prompt || typeof prompt !== 'string') {
+    throw new Error('Invalid prompt: must be a non-empty string');
+  }
+
+  const sanitizedPrompt = prompt
+    .trim()
+    .slice(0, 1000) // Limit prompt length
+    .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
+
+  const enhancedPrompt = `Generate a beautiful, ethereal sanctuary image: ${sanitizedPrompt}. Style: cinematic lighting, dramatic atmosphere, peaceful and spiritual mood, 9:16 aspect ratio portrait orientation.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
-      contents: enhancedPrompt,
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: enhancedPrompt,
+      }),
+      API_TIMEOUT_MS
+    );
 
     const parts = response.candidates?.[0]?.content?.parts;
     if (parts) {

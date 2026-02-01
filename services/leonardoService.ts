@@ -18,26 +18,45 @@ const ai = new GoogleGenAI({ apiKey });
 const vault = verifiedVault as VerifiedVault;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RETRY UTILITY FUNCTION
+// TIMEOUT & RETRY UTILITY FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
+
+const API_TIMEOUT_MS = 30000; // 30 second timeout for API calls
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = API_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`API request timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
 
 async function retry<T>(
   fn: () => Promise<T>,
-  options: { maxAttempts: number; delayMs: number }
+  options: { maxAttempts: number; delayMs: number; timeoutMs?: number }
 ): Promise<T> {
   let attempts = 0;
+  const timeoutMs = options.timeoutMs ?? API_TIMEOUT_MS;
+
   while (true) {
     try {
-      return await fn();
-    } catch (error: any) {
+      return await withTimeout(fn(), timeoutMs);
+    } catch (error: unknown) {
       attempts++;
-      if (attempts >= options.maxAttempts || error.code !== 503) {
-        // Only retry on 503 errors (Service Unavailable)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorCode = (error as { code?: number })?.code;
+
+      // Retry on 503 errors or timeouts
+      const isRetryable = errorCode === 503 || errorMessage.includes('timed out');
+
+      if (attempts >= options.maxAttempts || !isRetryable) {
         throw error;
       }
+
       console.warn(
         `Attempt ${attempts} failed, retrying in ${options.delayMs * Math.pow(2, attempts - 1)}ms:`,
-        error.message
+        errorMessage
       );
       await new Promise((resolve) =>
         setTimeout(resolve, options.delayMs * Math.pow(2, attempts - 1))
