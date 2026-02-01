@@ -11,7 +11,7 @@ export const generateWhisperImage = async (prompt: string): Promise<string> => {
   const enhancedPrompt = `${prompt} --aspect-ratio 9:16 --cinematic --lighting dramatic --style ethereal sanctuary`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
+    model: 'gemini-3-flash-preview',
     contents: {
       parts: [{ text: enhancedPrompt }]
     }
