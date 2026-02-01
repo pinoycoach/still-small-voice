@@ -4,6 +4,20 @@ interface InworldTTSConfig {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// API ENDPOINT CONFIGURATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Use proxy in development, direct API in production
+const getInworldEndpoint = () => {
+  // In development (localhost), use the Vite proxy
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return '/inworld-api/tts/v1/voice';
+  }
+  // In production, call the API directly
+  return 'https://api.inworld.ai/tts/v1/voice';
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RETRY UTILITY FUNCTION
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -15,17 +29,18 @@ async function retry<T>(
   while (true) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempts++;
-      const isServerError = error.response && error.response.status >= 500 && error.response.status < 600;
-      const isNetworkError = !error.response && error.message === 'Failed to fetch';
+      const err = error as { response?: { status?: number }; message?: string };
+      const isServerError = err.response && err.response.status && err.response.status >= 500 && err.response.status < 600;
+      const isNetworkError = !err.response && err.message === 'Failed to fetch';
 
       if (attempts >= options.maxAttempts || !(isServerError || isNetworkError)) {
         throw error;
       }
       console.warn(
         `Attempt ${attempts} failed, retrying in ${options.delayMs * Math.pow(2, attempts - 1)}ms:`,
-        error.message
+        err.message
       );
       await new Promise((resolve) =>
         setTimeout(resolve, options.delayMs * Math.pow(2, attempts - 1))
@@ -49,15 +64,17 @@ export async function generateInworldTTSAudio(
     whisperText = whisperText.substring(0, MAX_CHARS);
   }
 
+  const endpoint = getInworldEndpoint();
+
   console.log('Inworld TTS Request:', {
-    endpoint: '/inworld-api/tts/v1/voice',
+    endpoint,
     voice_id: config.voice,
     textLength: whisperText.length,
     textPreview: whisperText.substring(0, 100) + '...'
   });
 
   const response = await retry(async () => {
-    const res = await fetch('/inworld-api/tts/v1/voice', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${config.apiKeyBase64}`,
@@ -82,8 +99,10 @@ export async function generateInworldTTSAudio(
         statusText: res.statusText,
         body: errorBody
       });
-      const error: any = new Error(`Inworld TTS error: ${res.status} ${res.statusText}. Body: ${errorBody}`);
-      error.response = res;
+      const error: { message: string; response?: Response } = {
+        message: `Inworld TTS error: ${res.status} ${res.statusText}. Body: ${errorBody}`,
+        response: res
+      };
       throw error;
     }
     return res;
@@ -105,7 +124,7 @@ export async function generateInworldTTSAudio(
 
     // Validate it's valid base64
     try {
-      const testDecode = atob(result.audioContent.substring(0, 100));
+      atob(result.audioContent.substring(0, 100));
       console.log('Base64 validation passed, first bytes decoded successfully');
     } catch (e) {
       console.error('Invalid base64 in audio content:', e);
