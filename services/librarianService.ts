@@ -203,7 +203,7 @@ ${variationSeed}
   const response = await retryWithBackoff(async () => {
     return await withTimeout(
       ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.5-flash',
         contents: groundedPrompt + INTERPRETATION_FORMAT,
         config: {
           systemInstruction: LIBRARIAN_PERSONA,
@@ -279,7 +279,7 @@ Respond with valid JSON only in this exact format:
   const response = await retryWithBackoff(async () => {
     return await withTimeout(
       ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.5-flash',
         contents: analysisPrompt,
         config: {
           systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
