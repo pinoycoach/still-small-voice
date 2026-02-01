@@ -272,7 +272,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           {
             inlineData: {
@@ -403,7 +403,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
@@ -443,7 +443,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
@@ -481,7 +481,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
@@ -521,7 +521,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
@@ -568,7 +568,7 @@ Respond with valid JSON only in this exact format:
   const response = await retry(
     async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
           { text: prompt }
@@ -641,7 +641,7 @@ export async function validateFacePresent(imageBase64: string): Promise<boolean>
     const response = await retry(
       async () => {
         return await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3-flash-preview",
           contents: [
             { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
             { text: "Is there a human face visible and suitable for emotional analysis? Respond with valid JSON: {\"faceDetected\": true/false, \"suitableForAnalysis\": true/false}" }
