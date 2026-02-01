@@ -10,6 +10,8 @@ const ai = new GoogleGenAI({ apiKey });
 const vault = verifiedVault as VerifiedVault;
 
 const API_TIMEOUT_MS = 30000; // 30 second timeout
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1500; // Start with 1.5s, then 3s, then 6s
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number = API_TIMEOUT_MS): Promise<T> {
   return Promise.race([
@@ -18,6 +20,46 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number = API_TIMEOUT_MS)
       setTimeout(() => reject(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs)
     )
   ]);
+}
+
+/**
+ * Retry with exponential backoff for handling 503/rate limit errors
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = MAX_RETRIES,
+  initialDelay: number = INITIAL_RETRY_DELAY_MS
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const errorMessage = lastError.message.toLowerCase();
+
+      // Check if error is retryable
+      const isRetryable =
+        errorMessage.includes('503') ||
+        errorMessage.includes('overloaded') ||
+        errorMessage.includes('rate') ||
+        errorMessage.includes('busy') ||
+        errorMessage.includes('unavailable') ||
+        errorMessage.includes('timed out') ||
+        errorMessage.includes('resource exhausted');
+
+      if (!isRetryable || attempt >= maxRetries) {
+        throw lastError;
+      }
+
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.warn(`API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, errorMessage);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError || new Error('Unknown error in retry');
 }
 
 /**
@@ -157,18 +199,20 @@ ${variationSeed}
 2. **Image Prompt:** Create an ethereal sanctuary image inspired by: ${anchorVerse.image_mood}
 `;
 
-  // Step 4: Call the LLM with higher temperature for variety
-  const response = await withTimeout(
-    ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: groundedPrompt + INTERPRETATION_FORMAT,
-      config: {
-        systemInstruction: LIBRARIAN_PERSONA,
-        temperature: 0.7,
-      }
-    }),
-    API_TIMEOUT_MS
-  );
+  // Step 4: Call the LLM with higher temperature for variety (with retry for reliability)
+  const response = await retryWithBackoff(async () => {
+    return await withTimeout(
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: groundedPrompt + INTERPRETATION_FORMAT,
+        config: {
+          systemInstruction: LIBRARIAN_PERSONA,
+          temperature: 0.7,
+        }
+      }),
+      API_TIMEOUT_MS
+    );
+  });
 
   const text = response.text;
   if (!text) throw new Error("Librarian failed to interpret the verse");
@@ -232,17 +276,19 @@ Respond with valid JSON only in this exact format:
 }
 `;
 
-  const response = await withTimeout(
-    ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: analysisPrompt,
-      config: {
-        systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
-        temperature: 0.4,
-      }
-    }),
-    API_TIMEOUT_MS
-  );
+  const response = await retryWithBackoff(async () => {
+    return await withTimeout(
+      ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: analysisPrompt,
+        config: {
+          systemInstruction: "You are a compassionate spiritual counselor who identifies emotional patterns. Be gentle and accurate.",
+          temperature: 0.4,
+        }
+      }),
+      API_TIMEOUT_MS
+    );
+  });
 
   const text = response.text;
   if (!text) throw new Error("Failed to analyze emotional state");
