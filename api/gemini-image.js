@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const config = {
-  runtime: 'nodejs22x',
+  runtime: 'edge',
   maxDuration: 60,
 };
 
