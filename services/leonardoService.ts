@@ -309,8 +309,10 @@ Respond with valid JSON only in this exact format:
 }
 
 /**
- * DEEP SOUL ANALYSIS - Full Leonardo Engine v2.0
- * Runs all 4 agents in parallel for comprehensive spiritual discernment
+ * DEEP SOUL ANALYSIS - Full Leonardo Engine v2.0 (OPTIMIZED)
+ *
+ * SINGLE API CALL version to avoid Gemini rate limits.
+ * Combines all 4 agents into one comprehensive prompt.
  */
 export async function analyzeDeepSoul(
   imageBase64: string,
@@ -320,27 +322,113 @@ export async function analyzeDeepSoul(
     ? imageBase64.split('base64,')[1]
     : imageBase64;
 
-    // Run agents sequentially to avoid Gemini API overload
-  const basicAnalysis = await runBasicAnalysis(cleanBase64);
-  const temperament = await runTemperamentAgent(cleanBase64);
-  const emotionalWeather = await runEmotionalWeatherAgent(cleanBase64);
-  const burdenDetection = await runBurdenDetectorAgent(cleanBase64);
-  const authenticityBridge = userInput 
-    ? await runAuthenticityBridgeAgent(cleanBase64, userInput) 
-    : undefined;
+  // OPTIMIZED: Single API call combining all analysis
+  const combinedPrompt = `
+You are a compassionate spiritual counselor analyzing this person's facial expression.
+Perform a COMPREHENSIVE analysis covering all aspects in ONE response.
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SYNTHESIS ORACLE: Combine all agent outputs
-  // ─────────────────────────────────────────────────────────────────────────
+${userInput ? `The person said: "${userInput}"` : ''}
 
-  // Determine true need (face > words if significant gap)
+ARCHETYPES (choose one):
+${Object.entries(vault.archetypes).map(([name, data]) =>
+  `- ${name}: ${data.description}`
+).join('\n')}
+
+TEMPERAMENTS (choose one):
+- Sage: needs wisdom, eyes seeking/contemplative
+- Lover: needs comfort, soft/vulnerable expression
+- Warrior: needs courage, tension/determination
+- Child: needs rest, exhaustion/seeking safety
+
+Respond with valid JSON only:
+{
+  "archetype": "one of the archetypes above",
+  "intensityScore": 0-100,
+  "confidence": 0-100,
+  "reasoning": "brief explanation",
+  "temperament": "Sage|Lover|Warrior|Child",
+  "temperamentReasoning": "brief explanation",
+  "scriptureFamily": ["relevant", "scripture", "books"],
+  "warmthNeed": 0-100,
+  "powerLevel": 0-100,
+  "openness": 0-100,
+  "maskedPain": true|false,
+  "sfumatoCoefficient": 0-100,
+  "suppressionIndicators": ["any", "indicators"],
+  "ministryRecommendation": "surface|deeper|crisis"${userInput ? `,
+  "statedEmotion": "what they said",
+  "facialEmotion": "what face shows",
+  "incongruenceGap": 0-100,
+  "trueNeed": "their real need"` : ''}
+}
+`;
+
+  const response = await retry(
+    async () => {
+      return await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [
+          { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+          { text: combinedPrompt }
+        ],
+        config: {
+          systemInstruction: "You are a compassionate spiritual counselor with deep insight into human emotion. Analyze with accuracy and kindness.",
+        }
+      });
+    },
+    { maxAttempts: 3, delayMs: 2000 }
+  );
+
+  const text = response.text;
+  if (!text) throw new Error("Deep soul analysis failed");
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Failed to parse response as JSON");
+
+  const combined = JSON.parse(jsonMatch[0]);
+
+  // Validate archetype
+  if (!Object.keys(vault.archetypes).includes(combined.archetype)) {
+    combined.archetype = 'Lost Child';
+  }
+
+  // Build structured response from combined result
+  const temperament: TemperamentAnalysis = {
+    temperament: combined.temperament || 'Lover',
+    confidence: combined.confidence || 70,
+    scriptureFamily: combined.scriptureFamily || ['Psalms'],
+    reasoning: combined.temperamentReasoning || combined.reasoning
+  };
+
+  const emotionalWeather: EmotionalWeather = {
+    warmthNeed: combined.warmthNeed || 50,
+    powerLevel: combined.powerLevel || 50,
+    openness: combined.openness || 50
+  };
+
+  const burdenDetection: BurdenDetection = {
+    maskedPain: combined.maskedPain || false,
+    sfumatoCoefficient: combined.sfumatoCoefficient || 50,
+    suppressionIndicators: combined.suppressionIndicators || [],
+    ministryRecommendation: combined.ministryRecommendation || 'surface'
+  };
+
+  const authenticityBridge: AuthenticityBridge | undefined = userInput ? {
+    statedEmotion: combined.statedEmotion || userInput,
+    facialEmotion: combined.facialEmotion || 'mixed emotions',
+    incongruenceGap: combined.incongruenceGap || 20,
+    trueNeed: combined.trueNeed || combined.reasoning,
+    ministryApproach: combined.incongruenceGap > 50 ? 'Minister to the face, not the words' : 'Respond to stated need'
+  } : undefined;
+
+  // Determine true need
   let trueNeed: string;
   if (authenticityBridge && authenticityBridge.incongruenceGap > 40) {
     trueNeed = authenticityBridge.trueNeed;
   } else if (burdenDetection.maskedPain) {
     trueNeed = "Hidden pain beneath the surface";
   } else {
-    trueNeed = basicAnalysis.reasoning;
+    trueNeed = combined.reasoning;
   }
 
   // Determine ministry depth
@@ -353,19 +441,14 @@ export async function analyzeDeepSoul(
   }
 
   return {
-    // Basic analysis
-    archetype: basicAnalysis.archetype,
-    intensityScore: basicAnalysis.intensityScore,
-    confidence: basicAnalysis.confidence,
-    reasoning: basicAnalysis.reasoning,
-
-    // Agent outputs
+    archetype: combined.archetype,
+    intensityScore: combined.intensityScore || 50,
+    confidence: combined.confidence || 70,
+    reasoning: combined.reasoning,
     temperament,
     emotionalWeather,
     burdenDetection,
     authenticityBridge,
-
-    // Synthesis
     trueNeed,
     ministryDepth
   };

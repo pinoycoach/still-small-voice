@@ -162,7 +162,7 @@ export async function retrieveVerseWithRAG(
       5 // Get top 5 results
     );
 
-    const bestMatch = getBestMatch(ragResult.results, 0.65); // Lower threshold for more results
+    const bestMatch = getBestMatch(ragResult.results, 0.45); // Lower threshold for better RAG coverage
 
     if (bestMatch) {
       // Convert RAG result to AnchorVerse format
