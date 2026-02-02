@@ -28,22 +28,10 @@ export default async function handler(req, res) {
   }
 
   if (!PINECONE_API_KEY || !PINECONE_HOST || !GEMINI_API_KEY) {
-    console.log('[v0] Missing env vars:', {
-      hasPineconeKey: !!PINECONE_API_KEY,
-      hasPineconeHost: !!PINECONE_HOST,
-      hasGeminiKey: !!GEMINI_API_KEY
-    });
     return res.status(500).json({ 
-      error: 'Server configuration error: Missing Pinecone or Gemini API keys',
-      debug: {
-        hasPineconeKey: !!PINECONE_API_KEY,
-        hasPineconeHost: !!PINECONE_HOST,
-        hasGeminiKey: !!GEMINI_API_KEY
-      }
+      error: 'Server configuration error: Missing Pinecone or Gemini API keys'
     });
   }
-  
-  console.log('[v0] RAG search starting for query:', query.substring(0, 50));
 
   try {
     // Step 1: Generate embedding for the query using Gemini

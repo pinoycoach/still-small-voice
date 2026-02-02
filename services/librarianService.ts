@@ -153,8 +153,6 @@ export async function retrieveVerseWithRAG(
     throw new Error(`Unknown archetype: ${archetype}`);
   }
 
-  console.log('[v0] RAG retrieval starting for archetype:', archetype);
-
   try {
     // Attempt RAG search
     const ragResult = await searchVersesForContext(
@@ -163,11 +161,6 @@ export async function retrieveVerseWithRAG(
       emotionalContext,
       5 // Get top 5 results
     );
-
-    console.log('[v0] RAG search returned', ragResult.totalFound, 'results');
-    if (ragResult.results.length > 0) {
-      console.log('[v0] Top RAG result:', ragResult.results[0].reference, 'score:', ragResult.results[0].score);
-    }
 
     const bestMatch = getBestMatch(ragResult.results, 0.65); // Lower threshold for more results
 
@@ -191,9 +184,9 @@ export async function retrieveVerseWithRAG(
     }
 
     // No good match found, fall back to vault
-    console.log('[v0] RAG: No strong match found (below threshold), falling back to vault');
+    console.log('[RAG] No strong match found, falling back to vault');
   } catch (error) {
-    console.warn('[v0] RAG search failed, falling back to vault:', error);
+    console.warn('[RAG] Search failed, falling back to vault:', error);
   }
 
   // Fallback: Use the deterministic vault selection
