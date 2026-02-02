@@ -18,7 +18,6 @@ import {
   Sparkles, Play, Pause, Volume2, Download, Heart,
   Camera, RefreshCw, Type, Eye, Shield, AlertTriangle, Activity
 } from 'lucide-react';
-import RAGAdmin from './RAGAdmin';
 
 // Temperament icons mapping
 const TEMPERAMENT_ICONS: Record<string, string> = {
@@ -110,14 +109,6 @@ const CameraCountdown: React.FC<{ seconds: number }> = ({ seconds }) => (
 );
 
 const App: React.FC = () => {
-  // Check for admin mode via URL parameter
-  const [showAdmin, setShowAdmin] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('admin') === 'rag';
-    }
-    return false;
-  });
-
   // View state - START with welcome screen for feeling selection
   const [view, setView] = useState<ViewState>('welcome');
   const [loadingStage, setLoadingStage] = useState<keyof typeof LOADING_MESSAGES>('mirror');
@@ -634,18 +625,6 @@ const App: React.FC = () => {
     const meta = getArchetypeMetadata(archetype as any);
     return meta?.color || 'amber';
   };
-
-  // Show RAG Admin if ?admin=rag is in URL
-  if (showAdmin) {
-    return (
-      <RAGAdmin 
-        onBack={() => {
-          setShowAdmin(false);
-          window.history.replaceState({}, '', window.location.pathname);
-        }} 
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#02040a] text-amber-50 font-['Lato'] flex flex-col items-center justify-center overflow-hidden relative selection:bg-amber-500/30">
