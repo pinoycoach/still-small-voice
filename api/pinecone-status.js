@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     // Check if kjv namespace exists and has vectors
     const kjvNamespace = stats.namespaces?.kjv;
     const totalVectors = kjvNamespace?.vectorCount || 0;
-    const expectedVectors = 31102; // Approximate number of verses in KJV Bible
+    const expectedVectors = 31100; // Actual number of verses in KJV Bible index
     
     return res.status(200).json({
       configured: true,

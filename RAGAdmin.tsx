@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Database, CheckCircle, AlertCircle, Loader2, ArrowLeft, Play, Search } from 'lucide-react';
+import { RefreshCw, CheckCircle, AlertCircle, Loader2, ArrowLeft, Search } from 'lucide-react';
 
 interface PineconeStatus {
   configured: boolean;
@@ -18,18 +18,6 @@ interface PineconeStatus {
   error?: string;
 }
 
-interface EmbedResult {
-  success: boolean;
-  message: string;
-  totalVerses: number;
-  totalBatches: number;
-  processedBatches: { from: number; to: number };
-  processedVerses: number;
-  nextBatch: number | null;
-  isComplete: boolean;
-  errors?: Array<{ batch: number; error: string }>;
-}
-
 interface RAGSearchResult {
   results?: Array<{
     reference: string;
@@ -43,8 +31,6 @@ interface RAGSearchResult {
 export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [status, setStatus] = useState<PineconeStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [embedding, setEmbedding] = useState(false);
-  const [embedProgress, setEmbedProgress] = useState<EmbedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testQuery, setTestQuery] = useState('comfort for the weary');
   const [testResults, setTestResults] = useState<RAGSearchResult | null>(null);
@@ -68,32 +54,6 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     fetchStatus();
   }, []);
 
-  const startEmbedding = async (startBatch = 0) => {
-    setEmbedding(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/embed-bible', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startBatch, maxBatches: 20 }),
-      });
-
-      const data: EmbedResult = await res.json();
-      setEmbedProgress(data);
-
-      if (data.success && !data.isComplete && data.nextBatch !== null) {
-        setTimeout(() => startEmbedding(data.nextBatch!), 1000);
-      } else {
-        setEmbedding(false);
-        fetchStatus();
-      }
-    } catch (err) {
-      setError('Failed to embed Bible verses');
-      setEmbedding(false);
-    }
-  };
-
   const testRAGSearch = async () => {
     setTesting(true);
     setTestResults(null);
@@ -111,10 +71,6 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       setTesting(false);
     }
   };
-
-  const progressPercent = embedProgress 
-    ? Math.round((embedProgress.processedBatches.to / embedProgress.totalBatches) * 100)
-    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] via-[#050505] to-[#02040a] text-amber-100/90 p-6">
@@ -216,68 +172,6 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           ) : (
             <p className="text-amber-100/40 text-center py-4">Unable to load status</p>
           )}
-        </div>
-
-        {/* Embedding Card */}
-        <div className="mb-6 p-6 bg-amber-100/5 border border-amber-100/10 rounded-xl">
-          <div className="flex items-center gap-3 mb-4">
-            <Database size={20} className="text-amber-100/60" />
-            <h2 className="text-lg font-['Cinzel']">Embed Bible Verses</h2>
-          </div>
-          
-          <p className="text-sm text-amber-100/50 mb-4">
-            Generate embeddings for all ~31,000 KJV Bible verses and store them in Pinecone for semantic search.
-          </p>
-
-          {/* Embed Progress */}
-          {embedProgress && (
-            <div className="mb-4 p-4 bg-amber-100/5 rounded-lg">
-              <p className="text-sm mb-2">{embedProgress.message}</p>
-              <div className="h-2 bg-amber-100/10 rounded-full overflow-hidden mb-2">
-                <div 
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <p className="text-xs text-amber-100/40">
-                Batch {embedProgress.processedBatches.to} / {embedProgress.totalBatches} ({progressPercent}%)
-              </p>
-              {embedProgress.errors && embedProgress.errors.length > 0 && (
-                <p className="text-xs text-red-400 mt-1">
-                  {embedProgress.errors.length} error(s) encountered
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => startEmbedding(0)}
-              disabled={embedding || !status?.configured}
-              className="flex-1 py-3 px-4 bg-amber-100 text-[#0a0a0a] rounded-full text-sm font-bold flex items-center justify-center gap-2 hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {embedding ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Embedding...
-                </>
-              ) : (
-                <>
-                  <Play size={16} />
-                  Start Embedding
-                </>
-              )}
-            </button>
-
-            {embedProgress?.nextBatch && !embedding && (
-              <button
-                onClick={() => startEmbedding(embedProgress.nextBatch!)}
-                className="py-3 px-4 border border-amber-100/30 rounded-full text-sm hover:border-amber-100/50 transition-colors"
-              >
-                Resume
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Test Search Card */}
