@@ -372,8 +372,8 @@ const App: React.FC = () => {
       const whisper = await generateGroundedWhisper(analysis.archetype, adjustedIntensity, emotionalContext);
       setGroundedWhisper(whisper);
 
-      // Step 3: Generate image
-      const imageUrl = await generateWhisperImage(whisper.imagePrompt);
+      // Step 3: Generate image (uses archetype-specific fallback for speed, no API call)
+      const imageUrl = await generateWhisperImage(whisper.imagePrompt, analysis.archetype, false);
 
       // Create the gift object with deep analysis data
       setGift({
@@ -465,8 +465,8 @@ const App: React.FC = () => {
       const whisper = await generateGroundedWhisper(analysis.archetype, analysis.intensityScore, emotionalContext);
       setGroundedWhisper(whisper);
 
-      // Generate image
-      const imageUrl = await generateWhisperImage(whisper.imagePrompt);
+      // Generate image (uses archetype-specific fallback for speed, no API call)
+      const imageUrl = await generateWhisperImage(whisper.imagePrompt, analysis.archetype, false);
 
       setGift({
         id: Date.now().toString(),

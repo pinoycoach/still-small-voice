@@ -387,8 +387,27 @@ Respond with valid JSON only:
 
   const combined = JSON.parse(jsonMatch[0]);
 
+  // DETAILED LOGGING for Leonardo Engine validation
+  console.log('[Leonardo] ═══════════════════════════════════════');
+  console.log('[Leonardo] FACE ANALYSIS RESULTS:');
+  console.log(`[Leonardo]   Archetype: ${combined.archetype}`);
+  console.log(`[Leonardo]   Confidence: ${combined.confidence}%`);
+  console.log(`[Leonardo]   Intensity: ${combined.intensityScore}`);
+  console.log(`[Leonardo]   Reasoning: "${combined.reasoning}"`);
+  console.log('[Leonardo] ───────────────────────────────────────');
+  console.log(`[Leonardo]   Temperament: ${combined.temperament}`);
+  console.log(`[Leonardo]   Warmth Need: ${combined.warmthNeed}`);
+  console.log(`[Leonardo]   Power Level: ${combined.powerLevel}`);
+  console.log(`[Leonardo]   Openness: ${combined.openness}`);
+  console.log('[Leonardo] ───────────────────────────────────────');
+  console.log(`[Leonardo]   Masked Pain: ${combined.maskedPain}`);
+  console.log(`[Leonardo]   Sfumato: ${combined.sfumatoCoefficient}`);
+  console.log(`[Leonardo]   Ministry: ${combined.ministryRecommendation}`);
+  console.log('[Leonardo] ═══════════════════════════════════════');
+
   // Validate archetype
   if (!Object.keys(vault.archetypes).includes(combined.archetype)) {
+    console.warn(`[Leonardo] Invalid archetype "${combined.archetype}", defaulting to Lost Child`);
     combined.archetype = 'Lost Child';
   }
 

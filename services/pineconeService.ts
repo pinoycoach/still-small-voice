@@ -106,10 +106,30 @@ export async function searchVersesForContext(
   // Add archetype description as context
   queryParts.push(archetypeDescription);
 
+  // DETAILED RAG LOGGING
+  console.log('[RAG] ═══════════════════════════════════════');
+  console.log('[RAG] SEMANTIC SEARCH:');
+  console.log(`[RAG]   Archetype: ${archetype}`);
+  console.log(`[RAG]   Query Parts:`);
+  queryParts.forEach((part, i) => console.log(`[RAG]     ${i + 1}. "${part}"`));
+
   // Combine into a natural query
   const query = queryParts.join('. ');
+  console.log(`[RAG]   Full Query: "${query.substring(0, 100)}..."`);
+  console.log(`[RAG]   Searching ${topK} from 31,100 verses...`);
 
-  return searchVerses(query, { topK });
+  const result = await searchVerses(query, { topK });
+
+  // Log results
+  console.log(`[RAG] ───────────────────────────────────────`);
+  console.log(`[RAG] TOP ${result.results.length} MATCHES:`);
+  result.results.forEach((v, i) => {
+    console.log(`[RAG]   ${i + 1}. ${v.reference} (score: ${v.score.toFixed(3)})`);
+    console.log(`[RAG]      "${v.text.substring(0, 60)}..."`);
+  });
+  console.log('[RAG] ═══════════════════════════════════════');
+
+  return result;
 }
 
 /**
