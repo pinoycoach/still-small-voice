@@ -1,5 +1,5 @@
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
-const PINECONE_HOST = process.env.PINECONE_HOST;
+const PINECONE_API_KEY = process.env.PINECONE_API_KEY || process.env.VITE_PINECONE_API_KEY;
+const PINECONE_HOST = process.env.PINECONE_HOST || process.env.VITE_PINECONE_HOST;
 const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY;
 
 // Using a different, reliable KJV source

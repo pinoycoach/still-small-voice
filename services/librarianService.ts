@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { ArchetypeKey, AnchorVerse, GroundedWhisper, SoulAnalysis, VerifiedVault } from "../types";
 import verifiedVault from "../data/verified_vault.json";
+import { searchVersesForContext, getBestMatch, type RetrievedVerse } from "./pineconeService";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 if (!apiKey) {
@@ -119,6 +120,7 @@ Your function is to create a personal, intimate prayer/reflection that INTERPRET
 /**
  * Select an anchor verse deterministically based on archetype and intensity
  * Uses intensity score to cycle through the 10 available verses
+ * This is the FALLBACK when RAG is unavailable
  */
 export function selectAnchorVerse(archetype: ArchetypeKey, intensityScore: number): AnchorVerse {
   const archetypeData = vault.archetypes[archetype];
@@ -130,6 +132,102 @@ export function selectAnchorVerse(archetype: ArchetypeKey, intensityScore: numbe
   // Use intensity to deterministically select verse (0-100 maps to 0-9)
   const verseIndex = Math.floor(intensityScore / 10) % verses.length;
   return verses[verseIndex];
+}
+
+/**
+ * RAG-ENHANCED VERSE RETRIEVAL
+ * 
+ * Searches Pinecone for semantically relevant Bible verses based on 
+ * the user's emotional context. Falls back to vault if RAG fails.
+ */
+export async function retrieveVerseWithRAG(
+  archetype: ArchetypeKey,
+  intensityScore: number,
+  emotionalContext?: {
+    statedFeeling?: string;
+    trueNeed?: string;
+  }
+): Promise<{ verse: AnchorVerse; source: 'rag' | 'vault'; ragVerse?: RetrievedVerse }> {
+  const archetypeData = vault.archetypes[archetype];
+  if (!archetypeData) {
+    throw new Error(`Unknown archetype: ${archetype}`);
+  }
+
+  console.log('[v0] RAG retrieval starting for archetype:', archetype);
+
+  try {
+    // Attempt RAG search
+    const ragResult = await searchVersesForContext(
+      archetype,
+      archetypeData.description,
+      emotionalContext,
+      5 // Get top 5 results
+    );
+
+    console.log('[v0] RAG search returned', ragResult.totalFound, 'results');
+    if (ragResult.results.length > 0) {
+      console.log('[v0] Top RAG result:', ragResult.results[0].reference, 'score:', ragResult.results[0].score);
+    }
+
+    const bestMatch = getBestMatch(ragResult.results, 0.65); // Lower threshold for more results
+
+    if (bestMatch) {
+      // Convert RAG result to AnchorVerse format
+      const ragAnchorVerse: AnchorVerse = {
+        reference: bestMatch.reference,
+        text: bestMatch.text,
+        whisper_tone: determineWhisperTone(intensityScore),
+        prompt_context: `This verse was semantically matched to someone experiencing: ${archetypeData.description}`,
+        image_mood: generateImageMood(archetype, bestMatch.text)
+      };
+
+      console.log(`[RAG] Found verse: ${bestMatch.reference} (score: ${bestMatch.score.toFixed(3)})`);
+
+      return {
+        verse: ragAnchorVerse,
+        source: 'rag',
+        ragVerse: bestMatch
+      };
+    }
+
+    // No good match found, fall back to vault
+    console.log('[v0] RAG: No strong match found (below threshold), falling back to vault');
+  } catch (error) {
+    console.warn('[v0] RAG search failed, falling back to vault:', error);
+  }
+
+  // Fallback: Use the deterministic vault selection
+  return {
+    verse: selectAnchorVerse(archetype, intensityScore),
+    source: 'vault'
+  };
+}
+
+/**
+ * Determine whisper tone based on intensity
+ */
+function determineWhisperTone(intensityScore: number): 'Puck' | 'Kore' | 'Fenrir' {
+  if (intensityScore < 40) return 'Puck'; // Lighter, playful
+  if (intensityScore < 70) return 'Kore'; // Gentle, nurturing
+  return 'Fenrir'; // Deep, powerful
+}
+
+/**
+ * Generate image mood based on archetype and verse content
+ */
+function generateImageMood(archetype: ArchetypeKey, verseText: string): string {
+  const moodMap: Record<ArchetypeKey, string> = {
+    'Burdened Ruler': 'Majestic mountains with soft morning light breaking through clouds',
+    'Lost Child': 'A warm lantern glowing in a gentle forest clearing',
+    'Wounded Healer': 'Gentle hands cupping healing water, soft ethereal light',
+    'Silent Storm': 'A still lake reflecting storm clouds with a single ray of sunlight',
+    'Anxious Achiever': 'A peaceful garden path leading to a restful sanctuary',
+    'Faithful Doubter': 'Stars emerging through parting clouds at dusk',
+    'Joyful Servant': 'Golden wheat fields swaying in warm afternoon light',
+    'Weary Warrior': 'A strong oak tree providing shade by still waters'
+  };
+
+  return moodMap[archetype] || 'Ethereal sanctuary with soft divine light';
 }
 
 /**
@@ -147,6 +245,9 @@ export function getArchetypeMetadata(archetype: ArchetypeKey) {
 /**
  * Generate a grounded whisper using the Librarian Logic
  * Creative interpretation that stays anchored to the verse
+ * 
+ * NOW WITH RAG: Uses semantic search to find the most relevant verse
+ * for the user's specific emotional context, with vault fallback.
  */
 export async function generateGroundedWhisper(
   archetype: ArchetypeKey,
@@ -156,10 +257,25 @@ export async function generateGroundedWhisper(
     trueNeed?: string;
     warmthNeed?: number;
     ministryDepth?: string;
+  },
+  useRAG: boolean = true // Enable RAG by default
+): Promise<GroundedWhisper & { verseSource?: 'rag' | 'vault' }> {
+  // Step 1: Retrieve anchor verse (RAG-enhanced or vault fallback)
+  let anchorVerse: AnchorVerse;
+  let verseSource: 'rag' | 'vault' = 'vault';
+
+  if (useRAG) {
+    const ragResult = await retrieveVerseWithRAG(archetype, intensityScore, emotionalContext);
+    anchorVerse = ragResult.verse;
+    verseSource = ragResult.source;
+    
+    if (ragResult.source === 'rag' && ragResult.ragVerse) {
+      console.log(`[Librarian] Using RAG verse: ${ragResult.ragVerse.reference} (score: ${ragResult.ragVerse.score.toFixed(3)})`);
+    }
+  } else {
+    // Use deterministic vault selection
+    anchorVerse = selectAnchorVerse(archetype, intensityScore);
   }
-): Promise<GroundedWhisper> {
-  // Step 1: Deterministically select the anchor verse from the vault
-  const anchorVerse = selectAnchorVerse(archetype, intensityScore);
 
   // Step 2: Build variation seed for creative diversity
   const variationSeeds = [
@@ -223,11 +339,12 @@ ${variationSeed}
 
   const interpretation = JSON.parse(jsonMatch[0]) as { devotionalText: string; imagePrompt: string };
 
-  return {
+return {
     archetype,
     anchorVerse,
     devotionalText: interpretation.devotionalText,
-    imagePrompt: interpretation.imagePrompt
+    imagePrompt: interpretation.imagePrompt,
+    verseSource
   };
 }
 
