@@ -16,7 +16,8 @@ const createArchetypeSVG = (gradientTop: string, gradientMid: string, gradientBo
     <circle cx="256" cy="300" r="40" fill="none" stroke="${accentColor}" stroke-width="2" opacity="0.6"/>
     <text x="256" y="310" font-family="serif" font-size="36" fill="${accentColor}" text-anchor="middle" opacity="0.8" filter="url(#glow)">${symbol}</text>
   </svg>`;
-  return 'data:image/svg+xml;base64,' + btoa(svg);
+  // Use encodeURIComponent instead of btoa to handle Unicode symbols properly
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
 };
 
 // Pre-generated archetype images - instant, no API calls
