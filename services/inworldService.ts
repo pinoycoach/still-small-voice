@@ -11,12 +11,15 @@ interface InworldTTSConfig {
 const getInworldEndpoint = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    console.log('[v0] getInworldEndpoint - hostname:', hostname);
     // Local dev uses Vite proxy
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.log('[v0] Using local dev endpoint (Vite proxy)');
       return '/inworld-api/tts/v1/voice';
     }
   }
   // Production uses Vercel serverless function
+  console.log('[v0] Using production endpoint (Vercel API route)');
   return '/api/inworld-api/tts/v1/voice';
 };
 
