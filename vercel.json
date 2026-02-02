@@ -1,8 +1,7 @@
 {
-  "rewrites": [
-    {
-      "source": "/inworld-api/:path*",
-      "destination": "https://api.inworld.ai/:path*"
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "@vercel/node@3"
     }
-  ]
+  }
 }

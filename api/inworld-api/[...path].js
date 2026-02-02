@@ -1,34 +1,42 @@
-export const config = {
-  runtime: 'edge',
-};
+export default async function handler(req, res) {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(200).end();
+  }
 
-export default async function handler(request) {
-  const url = new URL(request.url);
   // Extract the path after /api/inworld-api/
-  const pathMatch = url.pathname.match(/\/api\/inworld-api\/(.+)/);
-  const path = pathMatch ? pathMatch[1] : '';
+  const { path } = req.query;
+  const apiPath = Array.isArray(path) ? path.join('/') : path;
 
-  const targetUrl = `https://api.inworld.ai/${path}`;
+  const targetUrl = `https://api.inworld.ai/${apiPath}`;
 
   console.log('Proxying to:', targetUrl);
+  console.log('Method:', req.method);
+  console.log('Headers:', req.headers);
 
-  // Forward the request to Inworld API
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers: {
-      'Authorization': request.headers.get('Authorization'),
-      'Content-Type': request.headers.get('Content-Type') || 'application/json',
-    },
-    body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined,
-  });
+  try {
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: {
+        'Authorization': req.headers.authorization,
+        'Content-Type': 'application/json',
+      },
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+    });
 
-  // Return the response
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: {
-      'Content-Type': response.headers.get('Content-Type') || 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+    const data = await response.json();
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+
+    return res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(500).json({ error: 'Proxy error', message: error.message });
+  }
 }
