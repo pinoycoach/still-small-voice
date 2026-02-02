@@ -320,20 +320,14 @@ export async function analyzeDeepSoul(
     ? imageBase64.split('base64,')[1]
     : imageBase64;
 
-  // Run all agents in parallel for speed
-  const [
-    basicAnalysis,
-    temperament,
-    emotionalWeather,
-    burdenDetection,
-    authenticityBridge
-  ] = await Promise.all([
-    runBasicAnalysis(cleanBase64),
-    runTemperamentAgent(cleanBase64),
-    runEmotionalWeatherAgent(cleanBase64),
-    runBurdenDetectorAgent(cleanBase64),
-    userInput ? runAuthenticityBridgeAgent(cleanBase64, userInput) : Promise.resolve(undefined)
-  ]);
+    // Run agents sequentially to avoid Gemini API overload
+  const basicAnalysis = await runBasicAnalysis(cleanBase64);
+  const temperament = await runTemperamentAgent(cleanBase64);
+  const emotionalWeather = await runEmotionalWeatherAgent(cleanBase64);
+  const burdenDetection = await runBurdenDetectorAgent(cleanBase64);
+  const authenticityBridge = userInput 
+    ? await runAuthenticityBridgeAgent(cleanBase64, userInput) 
+    : undefined;
 
   // ─────────────────────────────────────────────────────────────────────────
   // SYNTHESIS ORACLE: Combine all agent outputs
