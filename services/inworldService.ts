@@ -7,17 +7,17 @@ interface InworldTTSConfig {
 // API ENDPOINT CONFIGURATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Use Vite proxy in dev, Vercel API route in production (v4)
+// Use Vite proxy in dev, Vercel API route in production
 const getInworldEndpoint = () => {
   // Check if running in local dev environment
-  const isLocalDev = typeof window !== 'undefined' && 
+  const isLocalDev = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  
+
   if (isLocalDev) {
     // Local dev uses Vite proxy (configured in vite.config.ts)
     return '/inworld-api/tts/v1/voice';
   }
-  
+
   // Production/Preview uses Vercel serverless function
   return '/api/inworld-tts';
 };
@@ -153,4 +153,3 @@ export async function generateInworldTTSAudio(
   console.error('Inworld TTS API response missing audio content:', JSON.stringify(result, null, 2));
   throw new Error(`Inworld TTS error: No audio content returned. Response keys: ${Object.keys(result).join(', ')}`);
 }
-// Build timestamp: 1770029339
