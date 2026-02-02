@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { generateWhisperImage } from './services/geminiService';
 import { generateInworldTTSAudio } from './services/inworldService';
 import { generateGroundedWhisper, analyzeTextForArchetype, getArchetypeMetadata } from './services/librarianService';
