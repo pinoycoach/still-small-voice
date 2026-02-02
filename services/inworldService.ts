@@ -7,19 +7,18 @@ interface InworldTTSConfig {
 // API ENDPOINT CONFIGURATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Use Vite proxy in dev, Vercel API route in production (v2)
+// Use Vite proxy in dev, Vercel API route in production (v3)
 const getInworldEndpoint = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    console.log('[v0] getInworldEndpoint - hostname:', hostname);
-    // Local dev uses Vite proxy
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      console.log('[v0] Using local dev endpoint (Vite proxy)');
-      return '/inworld-api/tts/v1/voice';
-    }
+  // Check if running in local dev environment
+  const isLocalDev = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  if (isLocalDev) {
+    // Local dev uses Vite proxy (configured in vite.config.ts)
+    return '/inworld-api/tts/v1/voice';
   }
-  // Production uses Vercel serverless function
-  console.log('[v0] Using production endpoint (Vercel API route)');
+  
+  // Production/Preview uses Vercel serverless function at /api/inworld-api/
   return '/api/inworld-api/tts/v1/voice';
 };
 
