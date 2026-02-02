@@ -7,7 +7,7 @@ interface InworldTTSConfig {
 // API ENDPOINT CONFIGURATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Use Vite proxy in dev, Vercel API route in production
+// Use Vite proxy in dev, Vercel API route in production (v2)
 const getInworldEndpoint = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
