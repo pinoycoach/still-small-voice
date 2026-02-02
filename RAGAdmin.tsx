@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle, AlertCircle, Loader2, ArrowLeft, Search } from 'lucide-react';
+"use client";
+
+import { useState, useEffect } from 'react';
 
 interface PineconeStatus {
   configured: boolean;
@@ -28,7 +29,7 @@ interface RAGSearchResult {
   error?: string;
 }
 
-export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export function RAGAdmin({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState<PineconeStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,10 +82,10 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             onClick={onBack}
             className="p-2 rounded-full border border-amber-100/20 hover:border-amber-100/40 transition-colors"
           >
-            <ArrowLeft size={20} />
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
           </button>
           <div>
-            <h1 className="text-2xl font-['Cinzel'] text-amber-100">RAG System Admin</h1>
+            <h1 className="text-2xl font-serif text-amber-100">RAG System Admin</h1>
             <p className="text-sm text-amber-100/50">Manage Bible verse embeddings</p>
           </div>
         </div>
@@ -92,7 +93,7 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {/* Error Display */}
         {error && (
           <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-center gap-3">
-            <AlertCircle className="text-red-400" size={20} />
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
             <span className="text-red-300">{error}</span>
           </div>
         )}
@@ -100,19 +101,19 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {/* Status Card */}
         <div className="mb-6 p-6 bg-amber-100/5 border border-amber-100/10 rounded-xl">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-['Cinzel']">Pinecone Status</h2>
+            <h2 className="text-lg font-serif">Pinecone Status</h2>
             <button
               onClick={fetchStatus}
               disabled={loading}
               className="p-2 rounded-full border border-amber-100/20 hover:border-amber-100/40 transition-colors disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={loading ? 'animate-spin' : ''}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
             </button>
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="animate-spin text-amber-100/50" size={32} />
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin text-amber-100/50"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
             </div>
           ) : status ? (
             <div className="space-y-4">
@@ -122,12 +123,12 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 <div className="flex items-center gap-2">
                   {status.configured ? (
                     <>
-                      <CheckCircle className="text-green-400" size={16} />
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
                       <span className="text-green-400">Connected</span>
                     </>
                   ) : (
                     <>
-                      <AlertCircle className="text-red-400" size={16} />
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
                       <span className="text-red-400">Not Configured</span>
                     </>
                   )}
@@ -177,8 +178,8 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         {/* Test Search Card */}
         <div className="p-6 bg-amber-100/5 border border-amber-100/10 rounded-xl">
           <div className="flex items-center gap-3 mb-4">
-            <Search size={20} className="text-amber-100/60" />
-            <h2 className="text-lg font-['Cinzel']">Test RAG Search</h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-100/60"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <h2 className="text-lg font-serif">Test RAG Search</h2>
           </div>
 
           <div className="flex gap-3 mb-4">
@@ -194,7 +195,11 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               disabled={testing || !status?.kjvNamespace?.vectorCount}
               className="px-6 py-2 bg-amber-100/10 border border-amber-100/20 rounded-full text-sm hover:border-amber-100/40 transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {testing ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+              {testing ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              )}
               Search
             </button>
           </div>
@@ -226,6 +231,6 @@ export const RAGAdmin: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </div>
     </div>
   );
-};
+}
 
 export default RAGAdmin;

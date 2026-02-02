@@ -18,7 +18,7 @@ import {
   Sparkles, Play, Pause, Volume2, Download, Heart,
   Camera, RefreshCw, Type, Eye, Shield, AlertTriangle, Activity
 } from 'lucide-react';
-import { RAGAdmin } from './RAGAdmin';
+import RAGAdmin from './RAGAdmin';
 
 // Temperament icons mapping
 const TEMPERAMENT_ICONS: Record<string, string> = {
