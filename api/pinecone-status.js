@@ -1,5 +1,7 @@
 const PINECONE_API_KEY = process.env.PINECONE_API_KEY || process.env.VITE_PINECONE_API_KEY;
-const PINECONE_HOST = process.env.PINECONE_HOST || process.env.VITE_PINECONE_HOST;
+const RAW_HOST = process.env.PINECONE_HOST || process.env.VITE_PINECONE_HOST;
+// Normalize host - remove https:// if present, we'll add it ourselves
+const PINECONE_HOST = RAW_HOST?.replace(/^https?:\/\//, '');
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
