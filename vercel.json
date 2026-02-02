@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/inworld-api/:path*",
-      "destination": "https://studio.inworld.ai/:path*"
+      "destination": "https://api.inworld.ai/:path*"
     }
   ]
 }
