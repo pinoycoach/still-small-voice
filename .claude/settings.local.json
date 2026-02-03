@@ -20,7 +20,14 @@
       "Bash(gh api:*)",
       "Bash(curl:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:still-small-voice.vercel.app)"
+      "WebFetch(domain:still-small-voice.vercel.app)",
+      "Bash(git pull:*)",
+      "Bash(npx vercel:*)",
+      "Bash(node --check:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)"
     ]
   }
 }
