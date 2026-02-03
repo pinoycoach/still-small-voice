@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+// Using fetch directly for Edge compatibility (no SDK needed)
 
 export const config = {
   runtime: 'edge',
@@ -42,8 +42,6 @@ export default async function handler(request) {
       });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-
     const prompt = `
       Analyze this audio of a person speaking a prayer request or sharing their heart.
       Extract two things:
@@ -73,22 +71,46 @@ export default async function handler(request) {
     // Extract the pure base64 data (remove data URL prefix if present)
     const pureBase64 = audioBase64.includes(',') ? audioBase64.split(',')[1] : audioBase64;
 
-    console.log('[Backend] Calling Gemini 3 API with new SDK...');
-    const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        {
-          inlineData: {
-            mimeType,
-            data: pureBase64
-          }
-        },
-        { text: prompt }
-      ]
-    });
+    console.log('[Backend] Calling Gemini 3 API via REST...');
 
-    const responseText = result.text;
+    // Use Gemini REST API directly for Edge compatibility
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: pureBase64
+                }
+              },
+              { text: prompt }
+            ]
+          }]
+        })
+      }
+    );
+
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error('[Backend] Gemini API error:', geminiResponse.status, errorText);
+      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+    }
+
+    const geminiResult = await geminiResponse.json();
+    const responseText = geminiResult.candidates?.[0]?.content?.parts?.[0]?.text;
+
     console.log('[Backend] Gemini raw response:', responseText);
+
+    if (!responseText) {
+      throw new Error("No response from Gemini");
+    }
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
