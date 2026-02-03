@@ -1,7 +1,7 @@
-
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { generateWhisperImage } from './services/geminiService';
 import { generateInworldTTSAudio } from './services/inworldService';
+
 import { generateGroundedWhisper, analyzeTextForArchetype, getArchetypeMetadata } from './services/librarianService';
 import { analyzeDeepSoul } from './services/leonardoService';
 import { DevotionalGift, DeepSoulAnalysis, GroundedWhisper } from './types';
@@ -16,8 +16,10 @@ import {
 } from './constants';
 import {
   Sparkles, Play, Pause, Volume2, Download, Heart,
-  Camera, RefreshCw, Type, Eye, Shield, AlertTriangle, Activity
+  Camera, RefreshCw, Type, Eye, Shield, AlertTriangle, Activity,
+  Mic, Square
 } from 'lucide-react';
+import { processAudioWithGemini, createAudioRecorder } from './services/audioService';
 
 // Temperament icons mapping
 const TEMPERAMENT_ICONS: Record<string, string> = {
@@ -137,6 +139,13 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [analyzer, setAnalyzer] = useState<AnalyserNode | null>(null);
   const [audioReady, setAudioReady] = useState(false);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
+  
+  const recorderRef = useRef<ReturnType<typeof createAudioRecorder> | null>(null);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -543,7 +552,129 @@ const App: React.FC = () => {
     }
   };
 
-// ... (rest of the existing code)
+  // Audio recording functions
+  const [recordingAnalyzer, setRecordingAnalyzer] = useState<AnalyserNode | null>(null);
+
+  const handleStartRecording = async () => {
+    if (isRecording || isProcessingAudio) return;
+
+    try {
+      console.log('[Audio] Starting handleStartRecording (Local Gemini)');
+      setIsRecording(true);
+      setCameraError(null);
+      setLiveTranscript('');
+      initAudioContext();
+
+      recorderRef.current = createAudioRecorder();
+      await recorderRef.current.start(handleStopRecording); // Auto-stop on silence
+
+      // For visualizer
+      const stream = recorderRef.current.getStream();
+      if (stream && audioCtxRef.current) {
+          const source = audioCtxRef.current.createMediaStreamSource(stream);
+          const newAnalyzer = audioCtxRef.current.createAnalyser();
+          newAnalyzer.fftSize = 64;
+          source.connect(newAnalyzer);
+          setRecordingAnalyzer(newAnalyzer);
+      }
+
+    } catch (err: any) {
+      console.error('[Audio] Failed to start:', err);
+      setIsRecording(false);
+      setCameraError(`Mic error: ${err.message}`);
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (!isRecording) return;
+    
+    console.log('[Audio] handleStopRecording called');
+    setIsRecording(false);
+    setIsProcessingAudio(true);
+    setRecordingAnalyzer(null);
+
+    try {
+        const audioBlob = await recorderRef.current.stop();
+
+        if (audioBlob.size < 1000) {
+            console.log('[Audio] Recording too short, ignoring.');
+            setIsProcessingAudio(false);
+            return;
+        }
+
+        const { transcription, analysis } = await processAudioWithGemini(audioBlob);
+
+        setLiveTranscript(transcription);
+        setTextInput(transcription);
+
+        // Proceed through the Sacred Loop with the result
+        await continueSacredLoop(transcription, analysis);
+
+    } catch (error: any) {
+        console.error('[Audio] Processing failed:', error);
+        setCameraError(`Audio processing failed: ${error.message}`);
+        setIsProcessingAudio(false);
+    }
+  };
+
+  const continueSacredLoop = async (transcription: string, analysis: any) => {
+    try {
+        setView('diagnosis');
+        setLoadingStage('diagnosis');
+
+        setDeepAnalysis({
+          ...analysis,
+          temperament: {
+            temperament: 'Lover',
+            confidence: analysis.confidence,
+            scriptureFamily: ['Psalms'],
+            reasoning: analysis.reasoning
+          },
+          emotionalWeather: { warmthNeed: 70, powerLevel: 50, openness: 80 },
+          burdenDetection: { maskedPain: false, sfumatoCoefficient: 10, suppressionIndicators: [], ministryRecommendation: 'surface' },
+          trueNeed: analysis.reasoning,
+          ministryDepth: 'surface'
+        });
+
+      // After analysis reveal, proceed to grounded whisper
+      await new Promise(r => setTimeout(r, 2000));
+      setLoadingStage('anchor');
+
+      const emotionalContext = {
+        statedFeeling: transcription,
+        trueNeed: analysis.reasoning,
+        warmthNeed: 70,
+        ministryDepth: 'surface' as const
+      };
+
+      const whisper = await generateGroundedWhisper(analysis.archetype, analysis.intensityScore, emotionalContext);
+      setGroundedWhisper(whisper);
+
+      const imageUrl = await generateWhisperImage(whisper.imagePrompt, analysis.archetype, false);
+
+      setGift({
+        id: Date.now().toString(),
+        occasion: transcription,
+        devotionalText: whisper.devotionalText,
+        scriptureReference: whisper.anchorVerse.reference,
+        scriptureText: whisper.anchorVerse.text,
+        imagePrompt: whisper.imagePrompt,
+        imageUrl,
+        archetype: analysis.archetype,
+        intensityScore: analysis.intensityScore
+      });
+
+      setView('anchor');
+    } catch (err: any) {
+      console.error('[Audio] Sacred Loop failed:', err);
+      setCameraError(`Soul context failed: ${err.message}`);
+      if (view !== 'welcome') {
+        setView('input');
+      }
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
 
 
   // Audio playback
@@ -612,6 +743,9 @@ const App: React.FC = () => {
     audioBufferRef.current = null;
     pausedAtRef.current = 0;
     setView('welcome');
+    setIsRecording(false);
+    setIsProcessingAudio(false);
+    recorderRef.current = null;
   };
 
   // Switch to text input mode
@@ -633,9 +767,8 @@ const App: React.FC = () => {
 
       {/* Dynamic Aura Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute -top-1/4 -left-1/4 w-[70%] h-[70%] rounded-full blur-[160px] transition-all duration-[2000ms] opacity-20 ${
-          deepAnalysis ? `bg-${getArchetypeColorClass(deepAnalysis.archetype)}-900` : 'bg-amber-900'
-        }`}></div>
+        <div className={`absolute -top-1/4 -left-1/4 w-[70%] h-[70%] rounded-full blur-[160px] transition-all duration-[2000ms] opacity-20 ${deepAnalysis ? `bg-${getArchetypeColorClass(deepAnalysis.archetype)}-900` : 'bg-amber-900'
+          }`}></div>
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] mix-blend-overlay"></div>
       </div>
 
@@ -649,6 +782,21 @@ const App: React.FC = () => {
           </div>
           <p className="text-[8px] uppercase tracking-[0.2em] text-amber-100/30">NEXUS 3.5</p>
         </div>
+
+        {/* Global Error Message */}
+        {cameraError && (
+          <div className="absolute top-20 left-0 right-0 px-6 z-50 animate-in fade-in slide-in-from-top-4">
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 text-center">
+              <p className="text-[10px] text-rose-400 font-medium">{cameraError}</p>
+              <button
+                onClick={() => setCameraError(null)}
+                className="mt-1 text-[8px] uppercase tracking-widest text-rose-300/40 hover:text-rose-300"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* SCREEN 0: WELCOME - "How are you feeling today?" */}
         {view === 'welcome' && (
@@ -666,11 +814,10 @@ const App: React.FC = () => {
                 <button
                   key={feeling.id}
                   onClick={() => setSelectedFeeling(feeling.id as FeelingId)}
-                  className={`px-4 py-2.5 rounded-full text-sm transition-all duration-300 flex items-center gap-2 ${
-                    selectedFeeling === feeling.id
-                      ? 'bg-amber-100 text-[#0a0a0a] scale-105 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
-                      : 'bg-white/5 text-amber-100/60 hover:bg-white/10 border border-white/5'
-                  }`}
+                  className={`px-4 py-2.5 rounded-full text-sm transition-all duration-300 flex items-center gap-2 ${selectedFeeling === feeling.id
+                    ? 'bg-amber-100 text-[#0a0a0a] scale-105 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
+                    : 'bg-white/5 text-amber-100/60 hover:bg-white/10 border border-white/5'
+                    }`}
                 >
                   <span>{feeling.emoji}</span>
                   <span className="text-[11px] font-medium">{feeling.label}</span>
@@ -697,11 +844,77 @@ const App: React.FC = () => {
                   }
                   setView('input');
                 }}
-                className="text-[10px] text-amber-100/30 hover:text-amber-100/60 transition-colors flex items-center justify-center gap-2"
+                className="w-full group bg-white/5 text-amber-100/60 font-medium py-4 rounded-full transition-all hover:bg-white/10 active:scale-95 border border-white/10 flex items-center justify-center gap-3"
               >
-                <Type size={12} />
-                <span>Tell me more in words</span>
+                <Type size={14} />
+                <span className="uppercase tracking-[0.2em] text-[9px]">Tell me more in words</span>
               </button>
+
+
+
+              {/* Gemini 3 Audio Input - Primary Action */}
+              <div className="flex flex-col items-center gap-4 pt-6">
+                {/* Processing State - Full Card */}
+                {isProcessingAudio ? (
+                  <div className="w-full max-w-xs bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-amber-100/10 animate-in fade-in duration-500">
+                    {/* Processing Icon */}
+                    <div className="flex justify-center mb-4">
+                      <div className="w-16 h-16 rounded-full bg-amber-100/10 flex items-center justify-center relative">
+                        <div className="absolute inset-0 border-2 border-amber-200/30 border-t-amber-400 rounded-full animate-spin" />
+                        <Mic size={24} className="text-amber-200" />
+                      </div>
+                    </div>
+
+                    {/* Status Text */}
+                    <p className="text-center text-sm text-amber-100/80 mb-3">
+                      {liveTranscript ? 'Analyzing your heart...' : 'Transcribing...'}
+                    </p>
+
+                    {/* Live Transcription Display */}
+                    {liveTranscript && (
+                      <div className="bg-black/20 rounded-xl p-3 mb-3">
+                        <p className="text-xs text-amber-100/60 italic text-center">
+                          "{liveTranscript}"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Processing Steps */}
+                    <div className="flex justify-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <div className="w-2 h-2 rounded-full bg-amber-400/50 animate-pulse delay-100" />
+                      <div className="w-2 h-2 rounded-full bg-amber-400/30 animate-pulse delay-200" />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Normal/Recording State */}
+                    <p className={`text-[10px] uppercase tracking-[0.2em] transition-colors duration-500 ${isRecording ? 'text-rose-400' : 'text-amber-100/20'}`}>
+                      {(isRecording && !recordingAnalyzer) ? 'Initializing...' :
+                        (isRecording && recordingAnalyzer) ? 'Listening... Tap to stop' :
+                          'Or speak your prayer'}
+                    </p>
+                    <button
+                      onClick={isRecording ? handleStopRecording : handleStartRecording}
+                      className={`w-24 h-24 rounded-full flex flex-col items-center justify-center gap-2 transition-all duration-500 scale-110 relative overflow-hidden ${isRecording
+                        ? 'bg-rose-500/20 border-2 border-rose-500 shadow-[0_0_40px_rgba(244,63,94,0.5)] animate-pulse'
+                        : 'bg-amber-100/10 border border-amber-100/20 hover:bg-amber-100/20 hover:border-amber-100/40 shadow-[0_0_20px_rgba(251,191,36,0.1)]'
+                        }`}
+                    >
+                      {isRecording ? (
+                        <>
+                          <Square size={28} className="text-rose-500 fill-rose-500 z-10" />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+                            <AudioVisualizer isPlaying={true} analyzer={recordingAnalyzer} />
+                          </div>
+                        </>
+                      ) : (
+                        <Mic size={28} className="text-amber-200" />
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -823,6 +1036,45 @@ const App: React.FC = () => {
                   <Camera size={12} />
                   <span>Use camera instead</span>
                 </button>
+
+                {/* Audio Recording UI */}
+                <div className="pt-8 flex flex-col items-center gap-4">
+                  {isProcessingAudio ? (
+                    <div className="w-full bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-amber-100/10 animate-in fade-in">
+                      <div className="flex items-center justify-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-amber-100/10 flex items-center justify-center relative">
+                          <div className="absolute inset-0 border-2 border-amber-200/30 border-t-amber-400 rounded-full animate-spin" />
+                          <Mic size={16} className="text-amber-200" />
+                        </div>
+                        <p className="text-sm text-amber-100/80">
+                          {liveTranscript ? 'Analyzing...' : 'Transcribing...'}
+                        </p>
+                      </div>
+                      {liveTranscript && (
+                        <p className="text-xs text-amber-100/50 italic text-center">"{liveTranscript}"</p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <p className={`text-[10px] uppercase tracking-[0.2em] ${isRecording ? 'text-rose-400' : 'text-amber-100/20'}`}>
+                        {isRecording ? 'Listening... Tap to stop' : 'Or speak your prayer'}
+                      </p>
+                      <button
+                        onClick={isRecording ? handleStopRecording : handleStartRecording}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-500 ${isRecording
+                          ? 'bg-rose-500/20 border-2 border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.4)] animate-pulse'
+                          : 'bg-amber-100/10 border border-amber-100/20 hover:bg-amber-100/20'
+                          }`}
+                      >
+                        {isRecording ? (
+                          <Square size={24} className="text-rose-500 fill-rose-500" />
+                        ) : (
+                          <Mic size={24} className="text-amber-200" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -969,7 +1221,7 @@ const App: React.FC = () => {
                   <span>{TEMPERAMENT_ICONS[deepAnalysis.temperament.temperament]}</span>
                   <span>needs {deepAnalysis.temperament.temperament === 'Sage' ? 'Wisdom' :
                     deepAnalysis.temperament.temperament === 'Lover' ? 'Comfort' :
-                    deepAnalysis.temperament.temperament === 'Warrior' ? 'Courage' : 'Rest'}</span>
+                      deepAnalysis.temperament.temperament === 'Warrior' ? 'Courage' : 'Rest'}</span>
                 </div>
               </div>
             )}
@@ -1059,13 +1311,12 @@ const App: React.FC = () => {
                 <button
                   onClick={togglePlay}
                   disabled={!audioReady}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_0_30px_rgba(251,191,36,0.15)] ${
-                    !audioReady
-                      ? 'bg-amber-100/10 text-amber-100/30 cursor-wait'
-                      : isPlaying
-                        ? 'bg-amber-100/10 backdrop-blur-xl border border-amber-200/30 text-amber-100'
-                        : 'bg-amber-50 text-[#0a0a0a] hover:scale-105 hover:bg-white active:scale-95'
-                  }`}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_0_30px_rgba(251,191,36,0.15)] ${!audioReady
+                    ? 'bg-amber-100/10 text-amber-100/30 cursor-wait'
+                    : isPlaying
+                      ? 'bg-amber-100/10 backdrop-blur-xl border border-amber-200/30 text-amber-100'
+                      : 'bg-amber-50 text-[#0a0a0a] hover:scale-105 hover:bg-white active:scale-95'
+                    }`}
                 >
                   {!audioReady ? (
                     <div className="w-4 h-4 border-2 border-amber-200/30 border-t-amber-200 rounded-full animate-spin" />
