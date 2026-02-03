@@ -73,34 +73,56 @@ export default async function handler(request) {
 
     console.log('[Backend] Calling Gemini 3 API via REST...');
 
-    // Use Gemini REST API directly for Edge compatibility
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                inlineData: {
-                  mimeType,
-                  data: pureBase64
-                }
-              },
-              { text: prompt }
-            ]
-          }]
-        })
-      }
-    );
+    // Retry logic for API busy (503) and rate limit (429) errors
+    const MAX_RETRIES = 3;
+    let geminiResponse;
+    let lastError;
 
-    if (!geminiResponse.ok) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                {
+                  inlineData: {
+                    mimeType,
+                    data: pureBase64
+                  }
+                },
+                { text: prompt }
+              ]
+            }]
+          })
+        }
+      );
+
+      // Success - break out of retry loop
+      if (geminiResponse.ok) {
+        break;
+      }
+
+      // Check if it's a retryable error (503 Service Unavailable or 429 Rate Limit)
+      if ((geminiResponse.status === 503 || geminiResponse.status === 429) && attempt < MAX_RETRIES - 1) {
+        const waitTime = 1000 * Math.pow(2, attempt); // Exponential backoff: 1s, 2s, 4s
+        console.log(`[Backend] API busy (${geminiResponse.status}). Retrying in ${waitTime}ms... (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await new Promise(r => setTimeout(r, waitTime));
+        continue;
+      }
+
+      // Non-retryable error or max retries reached
       const errorText = await geminiResponse.text();
       console.error('[Backend] Gemini API error:', geminiResponse.status, errorText);
-      throw new Error(`Gemini API error: ${geminiResponse.status}`);
+      lastError = new Error(`Gemini API error: ${geminiResponse.status}`);
+    }
+
+    if (!geminiResponse.ok) {
+      throw lastError || new Error('Gemini API request failed after retries');
     }
 
     const geminiResult = await geminiResponse.json();
