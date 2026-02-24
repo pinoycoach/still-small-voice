@@ -11,6 +11,7 @@ import type {
   MinistryRecommendation,
   VerifiedVault
 } from "../types";
+import type { CloudVisionEmotions } from './visionService';
 import verifiedVault from "../data/verified_vault.json";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
@@ -313,14 +314,29 @@ Respond with valid JSON only in this exact format:
  *
  * SINGLE API CALL version to avoid Gemini rate limits.
  * Combines all 4 agents into one comprehensive prompt.
+ * Accepts optional Cloud Vision emotion scores as an objective baseline.
  */
 export async function analyzeDeepSoul(
   imageBase64: string,
-  userInput?: string
+  userInput?: string,
+  cloudVision?: CloudVisionEmotions
 ): Promise<DeepSoulAnalysis> {
   const cleanBase64 = imageBase64.includes('base64,')
     ? imageBase64.split('base64,')[1]
     : imageBase64;
+
+  // Build Cloud Vision context block if available
+  const cvContext = cloudVision?.cloudVisionAvailable
+    ? `\nOBJECTIVE EMOTION BASELINE (Google Cloud Vision measured independently):
+- Joy: ${cloudVision.joy}/100
+- Sorrow: ${cloudVision.sorrow}/100
+- Anger: ${cloudVision.anger}/100
+- Surprise: ${cloudVision.surprise}/100
+Use these as objective anchors alongside your visual analysis.
+High sorrow (>70) combined with a smiling expression = strong evidence of masked pain.
+High anger (>70) = consider Warrior temperament strongly.
+High surprise (>80) + low joy = possible shock or trauma, consider crisis depth.\n`
+    : '';
 
   // OPTIMIZED: Single API call combining all analysis
   const combinedPrompt = `
@@ -328,7 +344,7 @@ You are a compassionate spiritual counselor analyzing this person's facial expre
 Perform a COMPREHENSIVE analysis covering all aspects in ONE response.
 
 ${userInput ? `The person said: "${userInput}"` : ''}
-
+${cvContext}
 ARCHETYPES (choose one):
 ${Object.entries(vault.archetypes).map(([name, data]) =>
   `- ${name}: ${data.description}`
@@ -413,7 +429,7 @@ Respond with valid JSON only:
 
   // Build structured response from combined result
   const temperament: TemperamentAnalysis = {
-    temperament: combined.temperament || 'Lover',
+    temperament: combined.temperament || 'Sage',
     confidence: combined.confidence || 70,
     scriptureFamily: combined.scriptureFamily || ['Psalms'],
     reasoning: combined.temperamentReasoning || combined.reasoning
@@ -455,7 +471,9 @@ Respond with valid JSON only:
   if (authenticityBridge && authenticityBridge.incongruenceGap > 70) {
     ministryDepth = 'deeper';
   }
-  if (burdenDetection.sfumatoCoefficient < 3 && burdenDetection.maskedPain) {
+  if (burdenDetection.maskedPain &&
+      burdenDetection.sfumatoCoefficient >= 12 &&
+      burdenDetection.suppressionIndicators.length >= 2) {
     ministryDepth = 'crisis';
   }
 
@@ -470,6 +488,170 @@ Respond with valid JSON only:
     authenticityBridge,
     trueNeed,
     ministryDepth
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TEXT SOUL ANALYSIS - Leonardo Engine v2.0 for text/voice input paths
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * DEEP SOUL ANALYSIS — Text/Voice Path
+ *
+ * Runs the same 4-agent analysis as analyzeDeepSoul() but on written text
+ * instead of a face image. Reads vocabulary, tone, sentence weight, and
+ * linguistic suppression markers (minimizing language, contradiction, etc.)
+ *
+ * Used by: processTextInput(), continueSacredLoop() in App.tsx
+ * Returns the same DeepSoulAnalysis shape — the Librarian/Whisperer receives
+ * identical input regardless of which path (camera/text/voice) was taken.
+ */
+export async function analyzeTextDeepSoul(
+  text: string,
+  statedFeeling?: string
+): Promise<DeepSoulAnalysis> {
+  const sanitized = text
+    .trim()
+    .slice(0, 500)
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .replace(/\s+/g, ' ');
+
+  if (!sanitized) throw new Error('Text input is empty');
+
+  const archetypeList = Object.entries(vault.archetypes)
+    .map(([name, data]) => `- ${name}: ${data.description}`)
+    .join('\n');
+
+  const combinedPrompt = `
+You are a compassionate spiritual counselor reading a written prayer request.
+Analyze vocabulary, tone, sentence weight, and what is NOT said.
+${statedFeeling ? `The person indicated they feel: "${statedFeeling}"` : ''}
+
+Their words: "${sanitized}"
+
+LINGUISTIC SUPPRESSION MARKERS (for Burden Detector — detect these in text):
+- "I'm fine but..." / "I'm okay, just..." → minimizing language
+- Short, clipped sentences → emotional shutdown
+- "I shouldn't complain" / "others have it worse" → self-suppression
+- Stated feeling chip contradicts the emotional weight of the written words
+- Heavy topic framed casually or lightly
+- Crisis language embedded in small talk or hopeful framing
+
+ARCHETYPES (choose one):
+${archetypeList}
+
+TEMPERAMENTS:
+- Sage: intellectual/questioning tone, seeking understanding or clarity
+- Lover: emotional, relational language, seeking comfort and reassurance
+- Warrior: determined or frustrated language, fighting something, seeking strength
+- Child: overwhelmed, simple sentences, seeking safety or permission to rest
+
+Respond with valid JSON only:
+{
+  "archetype": "one of the archetypes above",
+  "intensityScore": 0-100,
+  "confidence": 0-100,
+  "reasoning": "brief explanation of text cues",
+  "temperament": "Sage|Lover|Warrior|Child",
+  "temperamentReasoning": "brief explanation",
+  "scriptureFamily": ["relevant", "books"],
+  "warmthNeed": 0-100,
+  "powerLevel": 0-100,
+  "openness": 0-100,
+  "maskedPain": true|false,
+  "sfumatoCoefficient": 0-100,
+  "suppressionIndicators": ["any", "linguistic", "markers", "found"],
+  "ministryRecommendation": "surface|deeper|crisis"${statedFeeling ? `,
+  "statedEmotion": "${statedFeeling}",
+  "textEmotion": "what the text actually reveals",
+  "incongruenceGap": 0-100,
+  "trueNeed": "their real need based on text"` : ''}
+}
+`;
+
+  const response = await retry(
+    async () => ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: combinedPrompt,
+      config: {
+        systemInstruction: 'You are a compassionate spiritual counselor skilled in reading emotional subtext in written prayer requests. Look for what people carry beneath their words.',
+        temperature: 0.2,
+      },
+    }),
+    { maxAttempts: 3, delayMs: 2000 }
+  );
+
+  const rawText = response.text;
+  if (!rawText) throw new Error('Text soul analysis failed');
+
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Failed to parse JSON from text analysis');
+
+  const combined = JSON.parse(jsonMatch[0]);
+
+  if (!Object.keys(vault.archetypes).includes(combined.archetype)) {
+    console.warn(`[Leonardo-Text] Invalid archetype "${combined.archetype}", defaulting to Lost Child`);
+    combined.archetype = 'Lost Child';
+  }
+
+  const temperament: TemperamentAnalysis = {
+    temperament: combined.temperament || 'Sage',
+    confidence: combined.confidence || 60,
+    scriptureFamily: combined.scriptureFamily || ['Psalms'],
+    reasoning: combined.temperamentReasoning || combined.reasoning,
+  };
+  const emotionalWeather: EmotionalWeather = {
+    warmthNeed: combined.warmthNeed ?? 50,
+    powerLevel: combined.powerLevel ?? 50,
+    openness: combined.openness ?? 50,
+  };
+  const burdenDetection: BurdenDetection = {
+    maskedPain: combined.maskedPain ?? false,
+    sfumatoCoefficient: combined.sfumatoCoefficient ?? 50,
+    suppressionIndicators: combined.suppressionIndicators || [],
+    ministryRecommendation: combined.ministryRecommendation || 'surface',
+  };
+  const authenticityBridge: AuthenticityBridge | undefined = statedFeeling
+    ? {
+        statedEmotion: combined.statedEmotion || statedFeeling,
+        facialEmotion: combined.textEmotion || 'text-based reading',
+        incongruenceGap: combined.incongruenceGap ?? 20,
+        trueNeed: combined.trueNeed || combined.reasoning,
+        ministryApproach:
+          (combined.incongruenceGap ?? 0) > 50
+            ? 'Minister to the deeper text truth'
+            : 'Respond to stated need',
+      }
+    : undefined;
+
+  let trueNeed = combined.reasoning;
+  if (authenticityBridge && authenticityBridge.incongruenceGap > 40) {
+    trueNeed = authenticityBridge.trueNeed;
+  } else if (burdenDetection.maskedPain) {
+    trueNeed = 'Hidden burden beneath the words';
+  }
+
+  let ministryDepth: MinistryRecommendation = burdenDetection.ministryRecommendation;
+  if (authenticityBridge && authenticityBridge.incongruenceGap > 70) ministryDepth = 'deeper';
+  if (burdenDetection.maskedPain && burdenDetection.suppressionIndicators.length >= 3) {
+    ministryDepth = 'crisis';
+  }
+
+  console.log(
+    `[Leonardo-Text] Archetype: ${combined.archetype} | Temperament: ${combined.temperament} | Ministry: ${ministryDepth}`
+  );
+
+  return {
+    archetype: combined.archetype,
+    intensityScore: combined.intensityScore ?? 50,
+    confidence: combined.confidence ?? 60,
+    reasoning: combined.reasoning,
+    temperament,
+    emotionalWeather,
+    burdenDetection,
+    authenticityBridge,
+    trueNeed,
+    ministryDepth,
   };
 }
 

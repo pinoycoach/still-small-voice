@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { generateWhisperImage } from './services/geminiService';
 import { generateInworldTTSAudio } from './services/inworldService';
 
-import { generateGroundedWhisper, analyzeTextForArchetype, getArchetypeMetadata } from './services/librarianService';
-import { analyzeDeepSoul } from './services/leonardoService';
+import { generateGroundedWhisper, getArchetypeMetadata } from './services/librarianService';
+import { analyzeDeepSoul, analyzeTextDeepSoul } from './services/leonardoService';
+import { getCloudVisionEmotions } from './services/visionService';
 import { DevotionalGift, DeepSoulAnalysis, GroundedWhisper } from './types';
 import {
   LOADING_MESSAGES,
@@ -346,9 +347,12 @@ const App: React.FC = () => {
       : undefined;
 
     try {
+      // Step 0: Cloud Vision — objective emotion baseline (non-blocking, graceful fallback)
+      const cloudVision = await getCloudVisionEmotions(imageData);
+
       // Step 1: Deep Soul Analysis (Leonardo Engine v2.0 - All 4 agents)
       // Pass feeling context to enable Authenticity Bridge (Agent 10) - compares stated vs facial emotion
-      const analysis = await analyzeDeepSoul(imageData, feelingContext);
+      const analysis = await analyzeDeepSoul(imageData, feelingContext, cloudVision);
       setDeepAnalysis(analysis);
 
       console.log('Deep Analysis:', {
@@ -431,45 +435,23 @@ const App: React.FC = () => {
     setLoadingMsgIndex(0);
 
     try {
-      // Analyze text for archetype (text mode uses simpler analysis)
-      const analysis = await analyzeTextForArchetype(textInput);
+      // Full deep analysis on text — same 4-agent schema as camera path
+      const feelingLabel = selectedFeeling
+        ? FEELING_CHIPS.find(f => f.id === selectedFeeling)?.label
+        : undefined;
 
-      // Create a partial deep analysis for consistency
-      setDeepAnalysis({
-        archetype: analysis.archetype,
-        intensityScore: analysis.intensityScore,
-        confidence: analysis.confidence,
-        reasoning: analysis.reasoning,
-        temperament: {
-          temperament: 'Lover', // Default for text input
-          confidence: 70,
-          scriptureFamily: ['Psalms'],
-          reasoning: 'Text-based analysis'
-        },
-        emotionalWeather: {
-          warmthNeed: 70,
-          powerLevel: 50,
-          openness: 80
-        },
-        burdenDetection: {
-          maskedPain: false,
-          sfumatoCoefficient: 10,
-          suppressionIndicators: [],
-          ministryRecommendation: 'surface'
-        },
-        trueNeed: analysis.reasoning,
-        ministryDepth: 'surface'
-      });
+      const analysis = await analyzeTextDeepSoul(textInput, feelingLabel);
+      setDeepAnalysis(analysis);
 
       await new Promise(r => setTimeout(r, 1500));
 
-      // Get grounded whisper with text input context
+      // Get grounded whisper with real emotional context (not hardcoded)
       setLoadingStage('anchor');
       const emotionalContext = {
         statedFeeling: textInput,
-        trueNeed: analysis.reasoning,
-        warmthNeed: 70,
-        ministryDepth: 'surface' as const
+        trueNeed: analysis.trueNeed,
+        warmthNeed: analysis.emotionalWeather.warmthNeed,
+        ministryDepth: analysis.ministryDepth
       };
       const whisper = await generateGroundedWhisper(analysis.archetype, analysis.intensityScore, emotionalContext);
       setGroundedWhisper(whisper);
@@ -617,24 +599,14 @@ const App: React.FC = () => {
     }
   };
 
-  const continueSacredLoop = async (transcription: string, analysis: any) => {
+  const continueSacredLoop = async (transcription: string, _basicAnalysis: any) => {
     try {
         setView('diagnosis');
         setLoadingStage('diagnosis');
 
-        setDeepAnalysis({
-          ...analysis,
-          temperament: {
-            temperament: 'Lover',
-            confidence: analysis.confidence,
-            scriptureFamily: ['Psalms'],
-            reasoning: analysis.reasoning
-          },
-          emotionalWeather: { warmthNeed: 70, powerLevel: 50, openness: 80 },
-          burdenDetection: { maskedPain: false, sfumatoCoefficient: 10, suppressionIndicators: [], ministryRecommendation: 'surface' },
-          trueNeed: analysis.reasoning,
-          ministryDepth: 'surface'
-        });
+        // Full deep analysis on transcribed text (replaces hardcoded Lover/surface defaults)
+        const fullAnalysis = await analyzeTextDeepSoul(transcription);
+        setDeepAnalysis(fullAnalysis);
 
       // After analysis reveal, proceed to grounded whisper
       await new Promise(r => setTimeout(r, 2000));
@@ -642,15 +614,15 @@ const App: React.FC = () => {
 
       const emotionalContext = {
         statedFeeling: transcription,
-        trueNeed: analysis.reasoning,
-        warmthNeed: 70,
-        ministryDepth: 'surface' as const
+        trueNeed: fullAnalysis.trueNeed,
+        warmthNeed: fullAnalysis.emotionalWeather.warmthNeed,
+        ministryDepth: fullAnalysis.ministryDepth
       };
 
-      const whisper = await generateGroundedWhisper(analysis.archetype, analysis.intensityScore, emotionalContext);
+      const whisper = await generateGroundedWhisper(fullAnalysis.archetype, fullAnalysis.intensityScore, emotionalContext);
       setGroundedWhisper(whisper);
 
-      const imageUrl = await generateWhisperImage(whisper.imagePrompt, analysis.archetype, false);
+      const imageUrl = await generateWhisperImage(whisper.imagePrompt, fullAnalysis.archetype, false);
 
       setGift({
         id: Date.now().toString(),
@@ -660,8 +632,8 @@ const App: React.FC = () => {
         scriptureText: whisper.anchorVerse.text,
         imagePrompt: whisper.imagePrompt,
         imageUrl,
-        archetype: analysis.archetype,
-        intensityScore: analysis.intensityScore
+        archetype: fullAnalysis.archetype,
+        intensityScore: fullAnalysis.intensityScore
       });
 
       setView('anchor');
@@ -1176,12 +1148,26 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Burden Detection Alert */}
-                  {deepAnalysis.burdenDetection.maskedPain && (
+                  {/* Burden Detection Alert — high confidence only */}
+                  {deepAnalysis.burdenDetection.maskedPain &&
+                    deepAnalysis.burdenDetection.sfumatoCoefficient >= 8 &&
+                    deepAnalysis.burdenDetection.suppressionIndicators.length >= 2 && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-900/20 border border-rose-500/20 animate-pulse">
                       <AlertTriangle size={12} className="text-rose-400/80" />
                       <span className="text-[9px] text-rose-200/70">
                         We see what you're carrying beneath the surface
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Soft presence message — low-confidence masked pain */}
+                  {deepAnalysis.burdenDetection.maskedPain &&
+                    !(deepAnalysis.burdenDetection.sfumatoCoefficient >= 8 &&
+                      deepAnalysis.burdenDetection.suppressionIndicators.length >= 2) && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-900/20 border border-amber-500/20">
+                      <Heart size={12} className="text-amber-400/60" />
+                      <span className="text-[9px] text-amber-200/60">
+                        We're here with whatever you're carrying today
                       </span>
                     </div>
                   )}
