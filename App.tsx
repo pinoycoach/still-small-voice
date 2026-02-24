@@ -22,6 +22,9 @@ import {
 } from 'lucide-react';
 import { processAudioWithGemini, createAudioRecorder } from './services/audioService';
 
+// Crisis detection — pre-flight check before Gemini runs
+const CRISIS_REGEX = /\b(end my life|kill myself|want to die|suicid|don't want to be here|can't go on|no reason to live|better off dead|hurt myself|self.harm|take my life)\b/i;
+
 // Temperament icons mapping
 const TEMPERAMENT_ICONS: Record<string, string> = {
   'Sage': '📚',
@@ -102,6 +105,40 @@ const AudioVisualizer: React.FC<{ isPlaying: boolean, analyzer: AnalyserNode | n
   );
 };
 
+// Crisis Intervention Banner — shown when ministryDepth === 'crisis' or pre-flight regex fires
+const CrisisBanner: React.FC = () => (
+  <div className="w-full rounded-2xl bg-rose-950/40 border border-rose-500/30 p-5 space-y-3">
+    <div className="flex items-center gap-2">
+      <AlertTriangle size={13} className="text-rose-400 shrink-0" />
+      <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-rose-200/80">
+        You don't have to face this alone
+      </span>
+    </div>
+    <p className="text-[11px] text-rose-100/70 leading-relaxed">
+      A real person is ready to talk right now — free, confidential, no judgment.
+    </p>
+    <div className="space-y-2">
+      <a
+        href="tel:988"
+        className="flex items-center justify-between w-full bg-rose-900/30 border border-rose-500/20 px-4 py-3 rounded-xl active:opacity-70"
+      >
+        <span className="text-[10px] text-rose-100/90 font-bold uppercase tracking-widest">988 Suicide &amp; Crisis Lifeline</span>
+        <span className="text-[11px] text-rose-300 font-bold">Call or Text 988</span>
+      </a>
+      <a
+        href="sms:741741?body=HOME"
+        className="flex items-center justify-between w-full bg-rose-900/20 border border-rose-500/10 px-4 py-3 rounded-xl active:opacity-70"
+      >
+        <span className="text-[10px] text-rose-100/70 uppercase tracking-widest">Crisis Text Line</span>
+        <span className="text-[11px] text-rose-300/80">Text HOME to 741741</span>
+      </a>
+    </div>
+    <p className="text-[9px] text-rose-100/30 text-center pt-1">
+      Your prayer is waiting below ↓
+    </p>
+  </div>
+);
+
 // Camera Countdown Component
 const CameraCountdown: React.FC<{ seconds: number }> = ({ seconds }) => (
   <div className="absolute inset-0 flex items-center justify-center">
@@ -128,6 +165,9 @@ const App: React.FC = () => {
 
   // Text fallback state
   const [textInput, setTextInput] = useState('');
+
+  // Crisis intervention
+  const [showCrisisBanner, setShowCrisisBanner] = useState(false);
 
   // Analysis state
   const [deepAnalysis, setDeepAnalysis] = useState<DeepSoulAnalysis | null>(null);
@@ -354,6 +394,7 @@ const App: React.FC = () => {
       // Pass feeling context to enable Authenticity Bridge (Agent 10) - compares stated vs facial emotion
       const analysis = await analyzeDeepSoul(imageData, feelingContext, cloudVision);
       setDeepAnalysis(analysis);
+      if (analysis.ministryDepth === 'crisis') setShowCrisisBanner(true);
 
       console.log('Deep Analysis:', {
         archetype: analysis.archetype,
@@ -430,6 +471,9 @@ const App: React.FC = () => {
     // Init audio context on this user interaction
     initAudioContext();
 
+    // Pre-flight crisis check — fires before Gemini runs so user sees help immediately
+    if (CRISIS_REGEX.test(textInput)) setShowCrisisBanner(true);
+
     setView('diagnosis');
     setLoadingStage('diagnosis');
     setLoadingMsgIndex(0);
@@ -442,6 +486,7 @@ const App: React.FC = () => {
 
       const analysis = await analyzeTextDeepSoul(textInput, feelingLabel);
       setDeepAnalysis(analysis);
+      if (analysis.ministryDepth === 'crisis') setShowCrisisBanner(true);
 
       await new Promise(r => setTimeout(r, 1500));
 
@@ -600,6 +645,9 @@ const App: React.FC = () => {
   };
 
   const continueSacredLoop = async (transcription: string, _basicAnalysis: any) => {
+    // Pre-flight crisis check on transcribed voice text
+    if (CRISIS_REGEX.test(transcription)) setShowCrisisBanner(true);
+
     try {
         setView('diagnosis');
         setLoadingStage('diagnosis');
@@ -607,6 +655,7 @@ const App: React.FC = () => {
         // Full deep analysis on transcribed text (replaces hardcoded Lover/surface defaults)
         const fullAnalysis = await analyzeTextDeepSoul(transcription);
         setDeepAnalysis(fullAnalysis);
+        if (fullAnalysis.ministryDepth === 'crisis') setShowCrisisBanner(true);
 
       // After analysis reveal, proceed to grounded whisper
       await new Promise(r => setTimeout(r, 2000));
@@ -705,6 +754,7 @@ const App: React.FC = () => {
   const handleReset = () => {
     stopCamera();
     setCapturedImage(null);
+    setShowCrisisBanner(false);
     setDeepAnalysis(null);
     setGroundedWhisper(null);
     setGift(null);
@@ -1182,6 +1232,9 @@ const App: React.FC = () => {
                       </span>
                     </div>
                   )}
+
+                  {/* Crisis Intervention Banner — diagnosis screen */}
+                  {showCrisisBanner && <CrisisBanner />}
                 </div>
               )}
 
@@ -1211,6 +1264,9 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Crisis Intervention Banner — anchor screen, shown above prayer */}
+            {showCrisisBanner && <CrisisBanner />}
 
             {/* Scripture Card */}
             <div className="w-full aspect-[4/5] rounded-[2rem] overflow-hidden border border-amber-100/10 relative shadow-2xl bg-[#0a0a0a]">
